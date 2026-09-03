@@ -44,9 +44,12 @@ throttle-state.json
 nvidia-verified.json
 llm7-verified.json
 
-# User-taught skills (learned from GitHub repos) — local, not committed
-skills/
-.skill-tmp/
+# User-taught skills (learned from GitHub repos) — local, not committed.
+# Anchored to the repo root: an unanchored `skills/` also ignores
+# src/skills/*.ts in fresh clones (where those tracked files don't yet
+# have index entries shielding them), which breaks `git add` and tsc.
+/skills/
+src/skills/.skill-tmp/
 
 # Generated multi-file projects (written to disk by coding mode) — local
 generated-projects/

@@ -277,17 +277,22 @@ jobs:
           SERVER_PID=$!
           echo "pid=$SERVER_PID" >> "$GITHUB_OUTPUT"
           # Wait (≤30s) for the server to answer any HTTP status on the catalog.
+          # NB: on connection failure curl itself prints 000 via -w AND exits
+          # non-zero — any `|| echo 000` fallback doubles the 000 and any
+          # "last N chars" trimming then mis-reads it as "00" (which passes
+          # the != 000 check and broke this loop: it "succeeded" in 60ms
+          # while tsx was still compiling, so the pentest hit a dead port).
           code="000"
           for i in $(seq 1 60); do
-            code=$({ curl -s -o /dev/null -w '%{http_code}' --max-time 2 \
-              http://localhost:5098/api/v1/models 2>/dev/null || echo 000; } | tail -c 3)
-            if [ "$code" != "000" ]; then break; fi
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 \
+              http://localhost:5098/api/v1/models 2>/dev/null) || code="000"
+            if [ "$code" != "000" ] && [ -n "$code" ]; then break; fi
             if ! kill -0 "$SERVER_PID" 2>/dev/null; then
               echo "::error::Server process exited during boot"; cat server.log; exit 1
             fi
             sleep 0.5
           done
-          if [ "$code" = "000" ]; then
+          if [ -z "$code" ] || [ "$code" = "000" ]; then
             echo "::error::Server did not answer within 30s (HTTP $code)"
             cat server.log
             exit 1
@@ -344,11 +349,17 @@ jobs:
             echo "::warning::JS bundle is ${SIZE_KB} KB gzipped — consider code splitting"
           fi
 
+      # Upload only the real build output (HTML entry + hashed JS/CSS), not the
+      # full dist: dist/background_elements is ~292MB of videos copied from
+      # public/ at build time — uploading them on every push piled up ~9.4GB
+      # of artifacts and hit the account storage quota, failing this job.
       - name: Upload production build artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend-dist-${{ github.sha }}
-          path: synthetic-nature/dist/
+          path: |
+            synthetic-nature/dist/index.html
+            synthetic-nature/dist/assets/
           retention-days: 14
 
   # ── STAGE 4: Repo Hygiene ────────────────────────────────────────────────

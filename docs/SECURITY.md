@@ -5,9 +5,7 @@ what is not, and why. It is written to be checkable: every claim here points at
 the code that makes it true.
 
 The plain-language version of this page ships **in the product**, under the Docs
-tab → Security and privacy. Both must say the same thing; if you change one,
-change the other.
-
+tab → Security and privacy.
 ---
 
 ## The premise
@@ -240,9 +238,7 @@ Open a **private** security advisory on the repository
 (GitHub → Security → Report a vulnerability), or contact the maintainer directly.
 Please do not open a public issue for anything exploitable.
 
-> Maintainers: replace this paragraph with your real reporting address before
-> publishing. Leaving it generic is better than inventing a contact that does not
-> receive mail.
+> Maintainers: theguysudo
 
 Include what you did, what you expected, and what happened. A proof of concept
 against a local instance is ideal.
