@@ -1,0 +1,49 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx index.ts",
+    "build:frontend": "cd synthetic-nature && npm ci && npm run build && npm run gzip:dist",
+    "build": "npm run build:frontend",
+    "start:prod": "npm run build && pm2 start ecosystem.config.cjs --env production",
+    "typecheck": "tsc --noEmit",
+    "check:imports": "node scripts/check-tracked-imports.mjs",
+    "test": "tsx tests/agent-tools.test.ts && tsx tests/project-fix.test.ts && tsx tests/project-idor.test.ts && tsx tests/crypto-store.test.ts && tsx synthetic-nature/src/lib/keyVault.test.ts && tsx synthetic-nature/src/lib/vaultRecovery.test.ts && tsx synthetic-nature/src/lib/modelPeer.test.ts && tsx tests/model-sync.test.ts",
+    "ci": "bash scripts/ci-runner.sh",
+    "pentest": "bash scripts/pentest.sh",
+    "deploy": "npm run build:frontend && git add synthetic-nature/dist && git commit -m \"chore: deploy front-end build $(date -u +'%Y-%m-%dT%H:%M:%SZ')\" && git push enzo-beta main"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/passport": "^1.0.17",
+    "@types/passport-google-oauth20": "^2.0.17",
+    "better-sqlite3": "^11.10.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "googleapis": "^174.0.1",
+    "groq-sdk": "^1.2.1",
+    "http-proxy-middleware": "^3.0.7",
+    "jsonwebtoken": "^9.0.3",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "pdfkit": "^0.19.1",
+    "styled-components": "^6.4.4",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.9.2",
+    "@types/pdfkit": "^0.17.6",
+    "@types/three": "^0.185.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}

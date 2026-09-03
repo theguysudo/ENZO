@@ -1,0 +1,530 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   HOMEPAGE POLISH — logged-out homepage craft pass (grain, texture, type)
+
+   Loaded from src/index.css. Design rules:
+
+   - Every rule here is PURELY COSMETIC (opacity / letter-spacing / shadow /
+     underline / selection color). No display, position, sizing, or z-index on
+     any existing element, so nothing app-wide can shift by a pixel.
+   - `section[data-section="homepage-hero"]` is the hero-scoping anchor.
+     Verified: that attribute exists on exactly ONE element in src/App.tsx
+     (the HomepageHero <section>), so :is() descendant selectors built on it
+     match only hero content. `home-*` classes are likewise hero-exclusive.
+   - TWO GATES, and the difference matters. `body[data-craft]` (attribute
+     present, any value) means SHARED CHROME — nav, footer, scrollbar,
+     selection, smooth scroll, light-theme contrast. Those are correct on any
+     logged-out landing surface, so the homepage ("home") and the Docs view
+     ("docs") both get them. `body[data-craft="home"]` means rules that target
+     the homepage's own sections, which must never reach a document body.
+     Adding a surface = pick the gate; forgetting the attribute = all inert.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1 · Boots flag — only references, never hard-depends, on the mount ─────
+   useCraftHomepageFlag (src/hooks) sets body[data-craft] to "home" on the
+   logged-out homepage and "docs" on the Docs view. When the app is logged in
+   or on another view the attribute is absent and ALL rules below go inert.
+   This is our blast-radius firewall.                                       */
+
+/* ── 2 · Film grain frame (overlay itself lives in FilmGrain.tsx) ──────────
+   The <canvas>/SVG node is .film-grain — position/z-index/opacity are set
+   inline by the component; this block only animates the texture so GPU
+   compositing is independent of React state.                              */
+.film-grain {
+  pointer-events: none;
+  /* subtle, infinite grain shimmer — 8 frames stepped, cheap on GPU */
+  animation: film-grain-shift 0.72s steps(8) infinite;
+  will-change: transform;
+}
+
+@keyframes film-grain-shift {
+  0%   { transform: translate3d(0, 0, 0); }
+  12%  { transform: translate3d(-1.4%, 0.9%, 0); }
+  25%  { transform: translate3d(0.8%, -1.6%, 0); }
+  37%  { transform: translate3d(-0.9%, -0.7%, 0); }
+  50%  { transform: translate3d(1.6%, 1.1%, 0); }
+  62%  { transform: translate3d(-1.2%, -1.3%, 0); }
+  75%  { transform: translate3d(0.6%, 1.5%, 0); }
+  87%  { transform: translate3d(-1.5%, -0.4%, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+
+/* ── 3 · Vignette (node lives in HomeVignette.tsx) ───────────────────────── */
+.home-vignette {
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 130% 90% at 50% 42%, transparent 52%, rgba(0, 0, 2, 0.34) 100%),
+    linear-gradient(180deg, rgba(0, 0, 2, 0.18) 0%, transparent 14%, transparent 80%, rgba(0, 0, 2, 0.3) 100%);
+}
+
+/* Light homepage themes need a gentler vignette — the component applies the
+   `home-vignette-light` modifier class when the active theme is pale. */
+.home-vignette-light {
+  background:
+    radial-gradient(ellipse 130% 90% at 50% 42%, transparent 55%, rgba(10, 8, 32, 0.16) 100%),
+    linear-gradient(180deg, rgba(10, 8, 32, 0.08) 0%, transparent 16%, transparent 84%, rgba(10, 8, 32, 0.14) 100%);
+}
+
+/* ── 4 · Hero typography refinement (hero-exclusive via attribute anchor) ── */
+section[data-section="homepage-hero"] .home-title {
+  letter-spacing: -0.058em;
+  line-height: 0.88;
+  text-wrap: balance;
+}
+
+/* Depth whisper against the video background — theme-aware via cascade */
+section[data-section="homepage-hero"].home-hero-dark .home-title {
+  text-shadow: 0 1px 2px rgba(1, 1, 8, 0.55), 0 10px 42px rgba(1, 1, 8, 0.38);
+}
+
+/* anime-sky already carries its own highlight text-shadow — leave untouched */
+
+section[data-section="homepage-hero"] .home-lede {
+  letter-spacing: 0.006em;
+}
+
+section[data-section="homepage-hero"].home-hero-dark .home-lede {
+  text-shadow: 0 1px 14px rgba(0, 0, 8, 0.42);
+}
+
+/* ── 5 · Hero CTA press physics (class-scoped, hero-only usage verified) ── */
+.home-primary-button:active,
+.home-secondary-button:active {
+  transform: scale(0.975);
+  transition-duration: 90ms;
+}
+
+/* ── 6 · Floating navbar life — armed on any crafted surface (home + docs);
+        the nav renders on every view, the body attribute does not ──────── */
+body[data-craft] nav button,
+body[data-craft] nav a {
+  transition-duration: 180ms;
+  transition-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+/* Underline-grow on the mono nav targets ("Home", "Docs", Sign out, etc.).
+   background-gradient underline keeps borders/layout untouched. */
+body[data-craft] nav .font-mono-display {
+  background: linear-gradient(currentColor, currentColor) no-repeat 0% calc(100% - 1px) / 0% 1px;
+  transition: color 180ms ease, background-size 240ms cubic-bezier(0.33, 1, 0.68, 1);
+  padding-bottom: 2px;
+}
+
+body[data-craft] nav .font-mono-display:hover {
+  background-size: 100% 1px;
+}
+
+body[data-craft] nav button:active {
+  transform: scale(0.97);
+}
+
+/* Theme selector track gets a hair more definition on hover */
+body[data-craft] nav .theme-selector:hover {
+  border-color: rgba(185, 197, 255, 0.4);
+  transition: border-color 200ms ease;
+}
+
+/* Mobile sheet targets */
+body[data-craft] .mobile-menu-glass button {
+  transition: color 180ms ease, opacity 180ms ease;
+}
+
+/* ── 7 · Footer (only present below logged-out content, home and docs both,
+        but gate anyway — the flag guarantees it) ────────────────────────── */
+body[data-craft] footer button {
+  transition: color 180ms ease, background-size 240ms cubic-bezier(0.33, 1, 0.68, 1);
+  background: linear-gradient(currentColor, currentColor) no-repeat 0% calc(100% - 1px) / 0% 1px;
+  padding-bottom: 2px;
+}
+
+body[data-craft] footer button:hover {
+  background-size: 100% 1px;
+}
+
+/* ── 8 · Scroll smoothness (guarded: only while homepage flag is up, so IT
+        flows/terminal scroll behaviour are never touched) ──────────────── */
+body[data-craft] html,
+html:has(> body[data-craft]) {
+  scroll-behavior: smooth;
+}
+
+/* ── 9 · Crafted selection + scrollbar (flag-gated, any crafted surface).
+        The scrollbar has to match across home and docs or the gutter width
+        changes between them, and the centred nav is `left-1/2 -translate-x-1/2`
+        — a 10px gutter difference walks it 5px sideways on navigation.     */
+body[data-craft] ::selection {
+  background: rgba(129, 140, 248, 0.34);
+  color: #f4f4ff;
+  text-shadow: none;
+}
+
+html:has(> body[data-craft])::-webkit-scrollbar {
+  width: 10px;
+}
+
+html:has(> body[data-craft])::-webkit-scrollbar-track {
+  background: #04050a;
+}
+
+html:has(> body[data-craft])::-webkit-scrollbar-thumb {
+  background: #181b26;
+  border: 2px solid #04050a;
+  border-radius: 8px;
+}
+
+html:has(> body[data-craft])::-webkit-scrollbar-thumb:hover {
+  background: #2a3040;
+}
+
+/* ── 10 · Below-fold render helper — opt-in class for heavy sections ─────── */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 800px;
+}
+
+/* ── 10b · Feature-showcase liquid-glass window chrome (gated on home flag) ─
+   Owned by HomepageFeatureShowcase.tsx. Cosmetic-only: gradient hairline via
+   masked border, soft inner sheen, floor fade, and a subtle light sweep that
+   follows the pointer through --showcase-sheen-x/--showcase-sheen-y.       */
+body[data-craft="home"] .homepage-showcase-frame {
+  position: relative;
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.28),
+    inset 0 0 24px rgba(255, 255, 255, 0.03),
+    0 24px 60px rgba(0, 0, 0, 0.35);
+  transition: box-shadow 260ms ease, transform 260ms ease;
+}
+
+body[data-craft="home"] .homepage-showcase-frame:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.32),
+    inset 0 0 28px rgba(255, 255, 255, 0.05),
+    0 32px 80px rgba(0, 0, 0, 0.45);
+}
+
+/* Gradient hairline (masked border, like .liquid-glass-panel) */
+body[data-craft="home"] .homepage-showcase-frame::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.2px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0.18) 25%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0.18) 78%,
+    rgba(255, 255, 255, 0.44) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Fluid sheen that trails the cursor across the glass */
+body[data-craft="home"] .homepage-showcase-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 1;
+  background: radial-gradient(
+    560px circle at var(--showcase-sheen-x, 50%) var(--showcase-sheen-y, 0%),
+    rgba(165, 180, 252, 0.08),
+    transparent 62%
+  );
+  opacity: 0;
+  transition: opacity 320ms ease-out;
+  pointer-events: none;
+}
+
+body[data-craft="home"] .homepage-showcase-frame:hover::after {
+  opacity: 1;
+}
+
+/* Title bar sits above shot + hairline */
+body[data-craft="home"] .homepage-showcase-bar {
+  position: relative;
+  z-index: 2;
+}
+
+/* Floor fade melts the screenshot into the page */
+body[data-craft="home"] .homepage-showcase-fade {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(6, 7, 12, 0.03) 40%,
+    rgba(6, 7, 12, 0.16) 100%
+  );
+}
+
+html:has(> body[data-craft="home"]).light-theme-mode .homepage-showcase-fade,
+body[data-craft="home"].light-theme-mode .homepage-showcase-fade {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(237, 240, 255, 0.05) 50%,
+    rgba(237, 240, 255, 0.18) 100%
+  );
+}
+
+/* ── 11 · Reduced motion — kill grain shimmer explicitly ─────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .film-grain {
+    animation: none;
+  }
+
+  body[data-craft] nav .font-mono-display,
+  body[data-craft] footer button {
+    transition-duration: 0.01ms;
+  }
+}
+
+/* ── 12 · Platform sections (HomepagePlatform.tsx) + hero trust strip ───────
+   The `.home-hero-*` classes below are hero-exclusive (the hero only mounts
+   on the logged-out homepage), so they need no body[data-craft] guard. The
+   `.homepage-*` classes exist only inside HomepagePlatform.tsx.
+   Colour variants keyed off `.light-theme-mode` — the wrapper div App.tsx
+   sets for the light space theme.                                          */
+
+/* Hero microcopy row — three claims under the CTAs */
+.home-hero-microcopy {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 1.5rem;
+  margin-top: 2.25rem;
+  /* 0.5 alpha keeps this ~6:1 on the dark hero — it's real copy, not chrome. */
+  color: rgba(236, 237, 255, 0.5);
+  font-family: 'Space Grotesk', ui-monospace, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.home-hero-sky .home-hero-microcopy {
+  /* 0.45 alpha vanished against the pale space theme — 0.68 clears AA. */
+  color: rgba(20, 30, 66, 0.68);
+  text-shadow: none;
+}
+
+.home-hero-microcopy > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.home-hero-microcopy > span + span::before {
+  content: '';
+  width: 0.2rem;
+  height: 0.2rem;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+/* Proof band — hairline above the counter row */
+.homepage-proof .homepage-gateway-rail > span {
+  cursor: default;
+}
+
+/* Bento tiles — masked gradient hairline, same recipe as the showcase frame */
+.homepage-bento-tile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0) 42%,
+    rgba(129, 140, 248, 0.16) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0.55;
+  transition: opacity 220ms ease-out;
+  pointer-events: none;
+}
+
+.homepage-bento-tile:hover::before {
+  opacity: 1;
+}
+
+.light-theme-mode .homepage-bento-tile::before {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.9),
+    rgba(255, 255, 255, 0) 46%,
+    rgba(79, 70, 229, 0.14) 100%
+  );
+}
+
+/* FAQ — rotate the `+` into an `×` on open; no JS state, no icon swap */
+.homepage-faq-mark {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.homepage-faq-item[open] .homepage-faq-mark {
+  transform: rotate(135deg);
+}
+
+.homepage-faq-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Footer — quiet links, crisp hover */
+.homepage-footer a,
+.homepage-footer button {
+  transition: color 160ms ease-out;
+}
+
+.homepage-footer a:hover,
+.homepage-footer button:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* ── 13 · Hero narrow-viewport overflow fix ─────────────────────────────────
+   DEVIATION from this file's "purely cosmetic" rule, deliberate: these are
+   sizing overrides, but they are hero-exclusive AND media-gated, so nothing
+   at >=48rem or outside the logged-out hero can move.
+
+   Cause: `.home-hero-inner` → `.home-title` → `.welcome-correction` is a
+   fit-content chain, and the innermost `min-width: min(88vw, 15ch)` (the
+   typing animation's anti-jitter reservation) plus the "Welcome to " prefix
+   resolves to a min-content width wider than a phone viewport — so the whole
+   hero bled off both edges. Pin every link in the chain to 100%.
+   Lives here, not index.css, so hero max-width overrides win the cascade.                     */
+@media (max-width: 48rem) {
+  .home-hero-inner,
+  .home-title,
+  .home-lede,
+  .home-hero-microcopy {
+    max-width: 100%;
+  }
+
+  /* ponytail: on mobile a little title reflow while typing beats a hero that
+     hangs off the screen. Restore the reservation if the jitter reads badly. */
+  .welcome-correction {
+    min-width: 0;
+  }
+
+  /* Keep the divider: hiding it makes the two claims contiguous text nodes,
+     which collapse into ONE anonymous flex item and lose the gap. */
+
+  /* Wrapped one-per-line, the inline separators read as list bullets. */
+  .home-hero-microcopy > span + span::before {
+    display: none;
+  }
+}
+
+/* ── 14 · Light-theme legibility on the landing page ────────────────────────
+   The `anime-sky` theme renders content over a mid-luminance video, where
+   Tailwind's slate-400/500 and indigo-500 muted ramps fall under 3:1. Darken
+   the ramp once here instead of re-tuning the same classes in five
+   components. Gated on BOTH the craft flag and the light wrapper, so the
+   workspace and every dark theme are untouched. This applies to docs as well
+   as the homepage — same classes, same video behind them, same contrast floor.
+                                                                             */
+body[data-craft] .light-theme-mode :is(.text-slate-400, .text-slate-500) {
+  color: #334155; /* slate-700 */
+}
+
+body[data-craft] .light-theme-mode .text-slate-600 {
+  color: #1e293b; /* slate-800 */
+}
+
+body[data-craft] .light-theme-mode :is(.text-indigo-500, .text-indigo-500\/80) {
+  color: #3730a3; /* indigo-800 */
+}
+
+/* ── 15 · Thank-you rail (HomepagePlatform.tsx · PlatformThanks) ─────────────
+   Left-to-right marquee: the track holds the card list TWICE and slides from
+   -50% to 0, so the instant the animation restarts the second copy sits exactly
+   where the first was and the seam is unobservable. `width: max-content` stops
+   the flex track from being squeezed to the rail's width, which is what would
+   otherwise make -50% a meaningless fraction.
+
+   -50% is only exact because the card spacing is a right margin on the card
+   rather than `gap` on the track — see the comment in PlatformThanks. Change one
+   without the other and the loop jumps.
+
+   ponytail: one keyframe, no JS, no measurement, no carousel library. The
+   ceiling is the doubled DOM — five cards rendered twice is nothing. If this
+   list ever grows past a screenful, that is the point to virtualise it, not
+   before.                                                                   */
+@keyframes thanks-drift {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+body[data-craft] .thanks-track {
+  width: max-content;
+  animation: thanks-drift 52s linear infinite;
+  /* Own layer: 52s of continuous transform otherwise repaints the cards'
+     backdrop-blur every frame, which is the expensive part. */
+  will-change: transform;
+}
+
+/* Pausing on hover/focus is not decoration — the cards are links, and a moving
+   target cannot be clicked reliably or read before it leaves. */
+body[data-craft] .thanks-rail:hover .thanks-track,
+body[data-craft] .thanks-rail:focus-within .thanks-track {
+  animation-play-state: paused;
+}
+
+/* Fade the ends into the page so cards enter and leave instead of being sheared
+   off at a hard edge. */
+body[data-craft] .thanks-rail {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-craft] .thanks-track {
+    animation: none;
+    transform: none;
+  }
+
+  /* With the motion gone the rail has to be scrollable by hand, or the last
+     credits sit permanently off-screen with no way to reach them. */
+  body[data-craft] .thanks-rail {
+    overflow-x: auto;
+  }
+}
+
+/* ── 16 · GSAP reveal helpers + justified ledes ─────────────────────────────
+   Both classes are inert until something uses them: .gsap-word only matters
+   once HomepageScrollAnimations splits a [data-gsap-words] heading into
+   per-word spans, and .homepage-just is applied by hand to wide lede
+   paragraphs whose edges should align like set copy. */
+
+.gsap-word {
+  display: inline-block;
+  /* Headings are centered; justify only kicks in for left-aligned ledes */
+  text-align: left;
+}
+
+.homepage-just {
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+}

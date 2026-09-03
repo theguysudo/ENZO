@@ -1,0 +1,920 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── shadcn/ui semantic tokens (dark-zinc, HSL triplets) ── */
+:root {
+  --background: 0 0% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 0 0% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 0 0% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 0 0% 9%;
+  --secondary: 0 0% 14.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 0 0% 14.9%;
+  --muted-foreground: 0 0% 63.9%;
+  --accent: 0 0% 14.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 0 0% 14.9%;
+  --input: 0 0% 14.9%;
+  --ring: 0 0% 83.1%;
+  --radius: 0.5rem;
+}
+
+/* ── pixel-on keyframe (used by terminal typing animation) ── */
+@keyframes pixel-on {
+  0%, 100% {
+    opacity: 0.12;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes shimmer-text {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* ── Reset ───────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ── Base ────────────────────────────────────────────────── */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: #010101;
+  color: #ffffff;
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Prevent overscroll rubber-banding from re-compositing the fixed
+     WebGL background layer, which caused whole-page flicker at scroll top. */
+  overscroll-behavior-y: none;
+}
+
+/* ── Font class ──────────────────────────────────────────── */
+.font-garamond {
+  font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
+}
+
+/*
+ * Art-directed display faces for the logged-out showcase:
+ * Fraunces is the "painter's poster" serif — big, bold, slightly wonky at
+ * large optical sizes; Caveat is the marker-pen hand used for margin notes,
+ * the DIY-artist's annotation in the corner of the canvas.
+ */
+.font-fraunces {
+  font-family: 'Fraunces', 'EB Garamond', 'Garamond', serif;
+  font-variation-settings: 'opsz' 144;
+}
+.font-fraunces-narrow {
+  font-family: 'Fraunces', 'EB Garamond', 'Garamond', serif;
+  font-variation-settings: 'opsz' 36;
+}
+.font-hand {
+  font-family: 'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive;
+}
+/*
+ * Playfair Display — high-contrast Didone serif for the engineering-notes
+ * section: artistic in its hairline/thick-stroke contrast, formal in its
+ * editorial discipline. Used for the feature-card titles and the
+ * "Four engineering decisions" intro.
+ */
+.font-playfair {
+  font-family: 'Playfair Display', 'EB Garamond', 'Garamond', serif;
+}
+
+/* ── Liquid Fill Button — pure CSS, no Tailwind hover dependency ── */
+
+/* Travelling wave: shift by exactly one wavelength so it loops seamlessly. */
+@keyframes lbtn-wave-1 { to { transform: translateX(2.4rem); } }
+@keyframes lbtn-wave-2 { to { transform: translateX(-3.5rem); } }
+
+@keyframes lbtn-bubble {
+  0%   { opacity: 0;    transform: translateY(0)        scale(0.7);  }
+  18%  { opacity: 0.75; }
+  100% { opacity: 0;    transform: translateY(-4.5rem)  scale(1.15); }
+}
+
+/* ── Shell ──────────────────────────────────────────────────────── */
+.liquid-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 3rem;                          /* h-12 */
+  padding: 0 1.5rem;                     /* px-6 */
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: #ffffff;
+  background-color: #020617;            /* slate-950 */
+  border: 1px solid rgba(103,232,249,0.3);
+  border-radius: 0.75rem;               /* rounded-xl */
+  overflow: hidden;
+  isolation: isolate;
+  cursor: pointer;
+  outline: none;
+  -webkit-user-select: none;
+  user-select: none;
+  box-shadow: 0 12px 32px -14px rgba(34,211,238,0.8);
+  transition: border-color 300ms ease, box-shadow 300ms ease, transform 300ms ease;
+}
+
+.liquid-btn:hover,
+.liquid-btn:focus-visible {
+  border-color: rgba(103,232,249,0.7);
+  box-shadow: 0 16px 40px -12px rgba(34,211,238,0.95);
+}
+
+.liquid-btn:focus-visible {
+  box-shadow: 0 0 0 3px rgba(103,232,249,0.35), 0 16px 40px -12px rgba(34,211,238,0.95);
+}
+
+.liquid-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.liquid-btn:disabled {
+  pointer-events: none;
+  opacity: 0.5;
+  box-shadow: none;
+}
+
+/* ── Rising liquid fill ─────────────────────────────────────────── */
+/*
+  Parked one full height below the button at rest (clipped by overflow:hidden),
+  slides to translateY(0) on hover. The -0.5rem top overshoot means the flat
+  top edge ends up above the button, so a full button floods solid.
+*/
+.liquid-btn__fill {
+  position: absolute;
+  inset: -0.5rem -25% 0;   /* wider than the button so wave crests never
+                              run out of pattern at the left/right edges */
+  z-index: 0;
+  background: linear-gradient(to bottom,
+    #0e7490  0%,    /* cyan-700   */
+    #0369a1 45%,    /* sky-700    */
+    #4338ca 100%    /* indigo-700 */
+  );
+  transform: translateY(105%);
+  transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+
+/* Hover / focus → liquid rises */
+.liquid-btn:hover        .liquid-btn__fill,
+.liquid-btn:focus-visible .liquid-btn__fill {
+  transform: translateY(0);
+}
+
+/* Disabled → keep it down */
+.liquid-btn:disabled .liquid-btn__fill {
+  transform: translateY(105%) !important;
+}
+
+/* ── Wavy surface ────────────────────────────────────────────────── */
+/*
+  Two rows of repeating half-ellipse scallops sitting on the fill's top edge,
+  drifting in opposite directions. Painted in the gradient's top colour so
+  they read as the liquid itself — not the button background, which is what
+  made the old rotating discs blank out the whole fill.
+*/
+.liquid-btn__wave {
+  position: absolute;
+  left:  -50%;
+  width: 200%;
+  pointer-events: none;
+}
+
+.liquid-btn__wave--1 {
+  top: -0.45rem;
+  height: 0.45rem;
+  background: radial-gradient(50% 100% at 50% 100%, #0e7490 99%, transparent 100%)
+              0 0 / 2.4rem 100% repeat-x;
+  animation: lbtn-wave-1 2.1s linear infinite;
+}
+
+.liquid-btn__wave--2 {
+  top: -0.28rem;
+  height: 0.28rem;
+  opacity: 0.55;
+  background: radial-gradient(50% 100% at 50% 100%, #0369a1 99%, transparent 100%)
+              0 0 / 3.5rem 100% repeat-x;
+  animation: lbtn-wave-2 3.2s linear infinite;
+}
+
+/* ── Bubbles ─────────────────────────────────────────────────────── */
+.liquid-btn__bubble {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  /* bubbles fade in when the button is hovered */
+  transition: opacity 200ms ease;
+}
+
+.liquid-btn:hover         .liquid-btn__bubble,
+.liquid-btn:focus-visible .liquid-btn__bubble {
+  opacity: 1;
+}
+
+.liquid-btn:disabled .liquid-btn__bubble {
+  display: none;
+}
+
+.liquid-btn__bubble--1 {
+  width: 6px;  height: 6px;
+  bottom: 1rem;   left: 22%;
+  background: rgba(255,255,255,0.70);
+  animation: lbtn-bubble 1.8s ease-in infinite;
+  animation-delay: 120ms;
+}
+.liquid-btn__bubble--2 {
+  width: 8px;  height: 8px;
+  bottom: 0.5rem;  left: 48%;
+  background: rgba(255,255,255,0.60);
+  animation: lbtn-bubble 2.2s ease-in infinite;
+  animation-delay: 520ms;
+}
+.liquid-btn__bubble--3 {
+  width: 4px;  height: 4px;
+  bottom: 1.25rem; left: 72%;
+  background: rgba(255,255,255,0.80);
+  animation: lbtn-bubble 1.6s ease-in infinite;
+  animation-delay: 860ms;
+}
+
+/* ── Label & glare ───────────────────────────────────────────────── */
+.liquid-btn__label {
+  position: relative;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.liquid-btn__glare {
+  position: absolute;
+  left: 1.25rem;
+  right: 1.25rem;
+  top: 0;
+  z-index: 20;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255,255,255,0.6), transparent);
+  pointer-events: none;
+}
+
+/* ── Liquid Glass button ─────────────────────────────────── */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.025);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.25), inset 0 0 12px rgba(255, 255, 255, 0.03);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, transform 0.18s ease;
+}
+
+.liquid-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.2px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.55) 0%,
+    rgba(255, 255, 255, 0.2) 25%,
+    rgba(255, 255, 255, 0) 50%,
+    rgba(255, 255, 255, 0.2) 75%,
+    rgba(255, 255, 255, 0.55) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.liquid-glass:hover {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.35), inset 0 0 16px rgba(255, 255, 255, 0.06);
+}
+
+.liquid-glass:active {
+  transform: scale(0.98);
+}
+
+/* ── Mobile menu glass ───────────────────────────────────── */
+.mobile-menu-glass {
+  background: rgba(15, 15, 20, 0.45);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.35),
+    inset 0 1px 1px rgba(255, 255, 255, 0.3),
+    inset 0 0 20px rgba(255, 255, 255, 0.02);
+}
+
+/* ── OAuth shimmer sweep ─────────────────────────────────── */
+@keyframes shimmer-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+.oauth-shimmer::after {
+  content: '';
+  position: absolute;
+  inset-y: 0;
+  left: 0;
+  width: 33%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+.oauth-shimmer:hover::after {
+  animation: shimmer-sweep 0.85s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: 0s;
+}
+
+/* ── Step pulse badge ────────────────────────────────────── */
+@keyframes step-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.step-active {
+  animation: step-pulse 1.4s ease-in-out infinite;
+}
+
+/* ── Liquid Glass Panel / Card ───────────────────────────── */
+.liquid-glass-panel {
+  background: rgba(10, 10, 14, 0.38);
+  background-blend-mode: luminosity;
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: none;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.3),
+    inset 0 0 24px rgba(255, 255, 255, 0.02),
+    0 16px 48px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.liquid-glass-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.2px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.4) 0%,
+    rgba(255, 255, 255, 0.15) 20%,
+    rgba(255, 255, 255, 0.02) 40%,
+    rgba(255, 255, 255, 0.02) 60%,
+    rgba(255, 255, 255, 0.15) 80%,
+    rgba(255, 255, 255, 0.4) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── Space homepage ─────────────────────────────────────── */
+.home-hero {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  overflow: hidden;
+  padding: 6.5rem 1.5rem 5rem;
+  text-align: center;
+}
+
+.home-hero-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  max-width: 56rem;
+  flex-direction: column;
+  align-items: center;
+}
+
+.home-hero-dark {
+  color: #f6f5ff;
+}
+
+.home-hero-sky {
+  color: #102b4a;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.home-title {
+  max-width: 18ch;
+  font-family: 'EB Garamond', 'Garamond', 'Times New Roman', serif;
+  font-size: clamp(3.15rem, 7vw, 6.25rem);
+  font-weight: 400;
+  letter-spacing: -0.058em;
+  line-height: 0.88;
+}
+
+.home-title > span {
+  display: block;
+}
+
+.welcome-correction {
+  display: inline-block;
+  min-width: min(88vw, 15ch);
+}
+
+.welcome-correction.is-final {
+  color: #16395f;
+}
+
+.home-hero-dark .welcome-correction.is-final {
+  color: #f0eeff;
+}
+
+.welcome-cursor {
+  display: inline-block;
+  width: 0.065em;
+  height: 0.73em;
+  margin-left: 0.08em;
+  background: currentColor;
+  vertical-align: -0.07em;
+  animation: cursor-blink 0.78s steps(1, end) infinite;
+}
+
+.home-lede {
+  max-width: 36rem;
+  margin-top: 2rem;
+  color: rgba(236, 237, 255, 0.68);
+  font-size: clamp(0.95rem, 2vw, 1.08rem);
+  font-weight: 300;
+  line-height: 1.68;
+  text-wrap: pretty;
+}
+
+.home-hero-sky .home-lede {
+  color: rgba(13, 56, 91, 0.82);
+  font-weight: 400;
+  text-shadow: 0 1px rgba(255, 255, 255, 0.42);
+}
+
+.home-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+.home-primary-button,
+.home-secondary-button {
+  display: inline-flex;
+  min-height: 3.15rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  border-radius: 1rem;
+  padding: 0.8rem 1.1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.69rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transition: transform 220ms ease, box-shadow 220ms ease, background 220ms ease;
+}
+
+.home-primary-button {
+  border: 1px solid rgba(228, 233, 255, 0.45);
+  background: linear-gradient(145deg, #eff1ff, #b8c1ff);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.95), inset 0 -3px 8px rgba(83, 98, 179, 0.32), 0 12px 25px rgba(76, 86, 194, 0.26);
+  color: #17162d;
+}
+
+.home-secondary-button {
+  border: 1px solid rgba(200, 206, 255, 0.28);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.035));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.18), inset 0 -8px 16px rgba(15, 13, 39, 0.13), 0 10px 26px rgba(3, 4, 20, 0.12);
+  color: inherit;
+}
+
+.home-primary-button:hover,
+.home-secondary-button:hover {
+  transform: translateY(-3px);
+}
+
+.home-primary-button:hover {
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.95), inset 0 -3px 8px rgba(83, 98, 179, 0.28), 0 18px 32px rgba(104, 113, 231, 0.35);
+}
+
+.home-hero-sky .home-primary-button {
+  border-color: rgba(255, 255, 255, 0.9);
+  background: linear-gradient(145deg, #fffdf7, #ddecf6);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.95), inset 0 -3px 8px rgba(65, 134, 184, 0.22), 0 12px 26px rgba(24, 96, 146, 0.24);
+  color: #12436d;
+}
+
+.home-hero-sky .home-secondary-button {
+  border-color: rgba(19, 90, 143, 0.28);
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.82), 0 10px 24px rgba(18, 96, 147, 0.13);
+}
+
+.home-scroll-cue {
+  position: absolute;
+  z-index: 2;
+  bottom: 1.7rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: rgba(226, 231, 255, 0.5);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.57rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.home-scroll-cue span {
+  display: block;
+  width: 1.9rem;
+  height: 1px;
+  background: currentColor;
+}
+
+.home-hero-sky .home-scroll-cue {
+  color: rgba(18, 76, 120, 0.68);
+}
+
+.home-orbit {
+  position: absolute;
+  z-index: 1;
+  border: 1px solid rgba(197, 204, 255, 0.1);
+  border-radius: 50%;
+  box-shadow: inset 0 0 5rem rgba(91, 94, 212, 0.04), 0 0 4rem rgba(110, 96, 222, 0.04);
+  pointer-events: none;
+}
+
+.home-orbit-one {
+  width: min(88vw, 62rem);
+  aspect-ratio: 1.65;
+  transform: rotate(-13deg);
+}
+
+.home-orbit-two {
+  width: min(68vw, 42rem);
+  aspect-ratio: 1;
+  transform: rotate(27deg);
+}
+
+:root {
+  --bg-brightness: 0.55;
+}
+
+.light-theme-mode {
+  --bg-brightness: 0.9;
+}
+
+.light-theme-mode nav {
+  background: rgba(237, 240, 255, 0.47) !important;
+  border-color: rgba(48, 45, 91, 0.1) !important;
+}
+
+.light-theme-mode nav .text-white,
+.light-theme-mode .home-hero + #info .text-white,
+.light-theme-mode #info .text-white,
+.light-theme-mode footer .text-white,
+.light-theme-mode footer button {
+  color: #191731 !important;
+}
+
+.light-theme-mode nav .text-white\/50,
+.light-theme-mode nav .text-white\/70,
+.light-theme-mode nav .text-white\/80,
+.light-theme-mode nav .text-white\/90,
+.light-theme-mode #info .text-white\/40,
+.light-theme-mode #info .text-white\/50,
+.light-theme-mode #info .text-white\/60,
+.light-theme-mode footer,
+.light-theme-mode footer .text-white\/30,
+.light-theme-mode footer span {
+  color: rgba(25, 23, 49, 0.62) !important;
+}
+
+.light-theme-mode nav .liquid-glass {
+  background: rgba(255, 255, 255, 0.38);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.9), 0 4px 14px rgba(62, 61, 125, 0.1);
+}
+
+.light-theme-mode #info .mobile-menu-glass {
+  background: rgba(255, 255, 255, 0.46);
+  border-color: rgba(45, 45, 95, 0.14);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.85), 0 12px 30px rgba(55, 57, 135, 0.12);
+}
+
+.light-theme-mode footer {
+  background: rgba(235, 237, 255, 0.42) !important;
+  border-color: rgba(45, 45, 95, 0.1) !important;
+}
+
+/* ── Theme controls ─────────────────────────────────────── */
+.theme-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  border: 1px solid rgba(185, 197, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(5, 8, 29, 0.46);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12), 0 5px 18px rgba(0, 0, 0, 0.18);
+  padding: 0.18rem;
+}
+
+.theme-selector button {
+  display: grid;
+  width: 1.8rem;
+  height: 1.8rem;
+  place-items: center;
+  border-radius: 50%;
+  color: rgba(232, 236, 255, 0.6);
+  transition: color 180ms ease, background 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+.theme-selector button:hover,
+.theme-selector button:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.theme-selector button.is-active {
+  color: #20294f;
+  background: radial-gradient(circle at 32% 28%, #ffffff, #b7c8ff 72%);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.9), 0 2px 6px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+
+/* ── Anime sky scene ────────────────────────────────────── */
+.anime-sky-scene {
+  --sky-shift-x: 0px;
+  --sky-shift-y: 0px;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #91d3f4;
+}
+
+.anime-sky-art,
+.anime-sky-rays,
+.anime-sky-haze {
+  position: absolute;
+  inset: -3%;
+  pointer-events: none;
+}
+
+.anime-sky-art {
+  background: url('/background_elements/enzo-anime-sky.png') center / cover no-repeat;
+  transform: scale(1.055) translate3d(var(--sky-shift-x), var(--sky-shift-y), 0);
+  transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.anime-sky-rays {
+  inset: -22% -10% -15%;
+  transform-origin: 10% 0%;
+  background:
+    linear-gradient(118deg, rgba(255, 255, 245, 0.37) 0%, rgba(255, 255, 255, 0.11) 17%, transparent 35%),
+    linear-gradient(128deg, rgba(255, 250, 226, 0.22) 0%, transparent 27%),
+    radial-gradient(ellipse at 9% 2%, rgba(255, 255, 241, 0.42), transparent 32%);
+  mix-blend-mode: screen;
+  opacity: 0.82;
+  animation: ray-breathe 9s ease-in-out infinite alternate;
+}
+
+.anime-sky-haze {
+  background: linear-gradient(180deg, rgba(207, 237, 255, 0.12), transparent 35%, rgba(255, 242, 219, 0.18) 100%);
+  mix-blend-mode: soft-light;
+}
+
+@keyframes cursor-blink {
+  0%, 44% { opacity: 1; }
+  45%, 100% { opacity: 0; }
+}
+
+@keyframes ray-breathe {
+  from { transform: rotate(-1.5deg) scale(1); opacity: 0.68; }
+  to { transform: rotate(1.6deg) scale(1.035); opacity: 0.9; }
+}
+
+
+.home-primary-button:focus-visible,
+.home-secondary-button:focus-visible,
+.theme-selector button:focus-visible {
+  outline: 2px solid #c7d2fe;
+  outline-offset: 3px;
+}
+
+@media (max-width: 480px) {
+  .home-title {
+    font-size: clamp(3rem, 15vw, 4.3rem);
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Anime Sky Video Backgrounds ──────────────────────────────────────── */
+.anime-scene {
+  --pan-x: 0px;
+  --pan-y: 0px;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: #000;
+  /* Isolate as its own paint/compositing layer so document scroll
+     never forces this fixed WebGL layer to repaint. */
+  contain: layout paint;
+  transform: translateZ(0);
+}
+
+.anime-scene-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.1) brightness(var(--bg-brightness, 1)) contrast(1.05);
+  transform: scale(1.08);
+}
+
+.anime-scene-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  mix-blend-mode: screen;
+  pointer-events: none;
+  filter: saturate(1.15) brightness(1.15) contrast(1.05);
+  opacity: 0.55;
+  transform: scale(1.12);
+}
+
+.anime-cloud-layer { opacity: 0.45; }
+.anime-effect-layer { opacity: 0.65; }
+
+/* ── Smooth Theme Selector Customizations ───────────────── */
+.smooth-theme-selector {
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08), 0 4px 18px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+
+/* ── Homepage premium pass (append-only; inert unless body[data-craft="home"]
+     is set, which useCraftHomepageFlag toggles only while the logged-out
+     homepage is mounted). Complements styles/homepage-polish.css. ────────── */
+
+/* Feature cards ("01 · Direct Node Gateway" …) — side rail layout + sheen */
+body[data-craft="home"] .homepage-feature-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  overflow: hidden;
+  text-align: left;
+}
+
+/* Cursor-follow sheen: --sheen-x/--sheen-y are written by
+   HomepageFeatureCard's onMouseMove (no React state involved). */
+body[data-craft="home"] .homepage-feature-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    340px circle at var(--sheen-x, 50%) var(--sheen-y, 0%),
+    rgba(165, 180, 252, 0.09),
+    transparent 68%
+  );
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+  pointer-events: none;
+}
+
+body[data-craft="home"] .homepage-feature-card:hover::after {
+  opacity: 1;
+}
+
+/* Press physics on the clickable homepage surfaces */
+body[data-craft="home"] .homepage-feature-card:active,
+body[data-craft="home"] #architecture button:active,
+body[data-craft="home"] .homepage-tab:active {
+  transform: scale(0.99);
+}
+
+/* Catalog / sandbox tabs — consistent focus + press affordance */
+body[data-craft="home"] .homepage-tab:focus-visible,
+body[data-craft="home"] #architecture button:focus-visible {
+  outline: 1px solid rgba(165, 180, 252, 0.8);
+  outline-offset: 2px;
+}
+
+/* Section header kerning (Garamond display sizes) */
+body[data-craft="home"] #info > div:first-child h2,
+body[data-craft="home"] #architecture > div:first-child h2 {
+  letter-spacing: -0.02em;
+}
+
+/* Scanner stream frame — neutral hairline glass instead of the cyan neon frame
+   (internal scan-line stays cyan; the container no longer competes). */
+body[data-craft="home"] .hairline-frame {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.light-theme-mode .hairline-frame {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body[data-craft="home"] .homepage-feature-card,
+  body[data-craft="home"] .homepage-feature-card::after,
+  body[data-craft="home"] .homepage-tab,
+  body[data-craft="home"] #architecture button {
+    transition: none;
+  }
+
+  body[data-craft="home"] .homepage-feature-card:hover {
+    transform: none;
+  }
+}
+
+/* ── Editorial launch refinement (append-only, same data-craft gating) ────── */
+
+/* Section h2s sit between the hero display rules and body copy — weight toward
+   500 (EB Garamond 500 is loaded) and tighter than default. */
+body[data-craft="home"] #info h2,
+body[data-craft="home"] #architecture h2 {
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+/* Body copy in the homepage sections reads toward 70% white; light-theme
+   keeps its own (dark) text via the existing classes. */
+body[data-craft="home"] .homepage-body:not(.homepage-body-light) {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+/* The hairline rule between sections aligns with the section content inset */
+body[data-craft="home"] hr.border-t {
+  margin-left: 1.5rem;
+  margin-right: 1.5rem;
+  width: calc(100% - 3rem);
+}

@@ -1,0 +1,118 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+frontend2/.output/
+frontend2/.vinxi/
+frontend2/dist/
+*.js.map
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# API key credential files (never commit)
+*.rtf
+Nvidia_api_key.rtf
+AWS_ACESS_DETAILS.rtf
+
+# Screenshots
+Screenshot*.png
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Model cache (large, regenerated at startup)
+model-cache.json
+memory-store.json
+
+# Background health-ping store (live status + latency per model, regenerated every 5 min)
+model-health.json
+
+# Outbound throttle state + NVIDIA reachability verification cache
+throttle-state.json
+nvidia-verified.json
+llm7-verified.json
+
+# User-taught skills (learned from GitHub repos) — local, not committed
+skills/
+.skill-tmp/
+
+# Generated multi-file projects (written to disk by coding mode) — local
+generated-projects/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Test artifacts
+test/
+# ci-runner.sh writes its step-by-step report here on every run
+.ci-report.txt
+
+# Large media / video assets (use Git LFS or external storage)
+Homepage_Video/
+Open_Animation/
+cinematic/
+
+# Local/unrelated temp directories
+Truus.co-Awwward-Website/
+Browserpad - A notepad in the browser.xhtml
+download.pdf
+readme.txt
+.claude/
+anime_elements/
+
+# Duplicate video assets (82MB — byte-for-byte copy of synthetic-nature/public/background_elements/marketplace/)
+marketplace_theme/
+
+# Personal / stray files that do not belong in source control
+*.pdf
+AWS_ACESS_DETAILS.rtf
+Nvidia_api_key.rtf
+
+# OAuth credentials + refresh tokens (written at runtime, AES-256-GCM sealed on
+# disk by crypto-store.ts — still never committed, sealed or not)
+.gmail-tokens.json
+client_secret_*.json
+
+# Regenerated caches (rebuilt on demand; committing them just creates conflicts)
+cloudflare-plan-tier.json
+model-info-cache.json
+
+# Editor / tooling scratch
+.kilo/
+.qodo/
+*.vsix
+
+# Local clones and scratch trees that live beside the source but are not ours
+claude-code-main/
+claude-code-leaked-main/
+lamp/
+X
+
+# Promo source material (large originals; shipped copies live in synthetic-nature/public)
+promotional _images/
+
+# Coding-mode scratch projects created outside generated-projects/
+enzo-project-*/
+
+# The test suite is tracked on purpose: `npm test` in CI runs these files by
+# path, so ignoring tests/ makes a fresh clone fail with ERR_MODULE_NOT_FOUND.
+# (.env.example itself is tracked: it is a sanitized placeholder template with
+# no real values — `cp .env.example .env` is step 1 of the README quick-start,
+# which a fresh clone could otherwise not perform.)
+config/.env.example
+
+# docker repo: dist is built inside the image, never committed
+synthetic-nature/dist

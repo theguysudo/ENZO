@@ -1,0 +1,32 @@
+# Build context = the repo checkout. The image only receives what the
+# Dockerfile COPYs (index.ts, tsconfig.json, src/, skills-bundled/, package
+# files, synthetic-nature/ for the frontend stage) — everything else just
+# slows the context upload. None of the app's runtime secrets/state may ever
+# enter an image; .env is additionally never present in this repo at all.
+.git
+.env
+.env.*
+.gmail-tokens.json
+node_modules
+**/node_modules
+synthetic-nature/dist
+.DS_Store
+**/.DS_Store
+*.bak
+generated-projects
+logs
+skills
+tests
+docs
+archive
+deploy
+ecosystem.config.cjs
+.claude
+.zcode
+# Runtime-written caches under src/ — regenerable, and a dirty dev tree must
+# not leak local model data into an image. The tracked .ts files in src/models/
+# are unaffected (this excludes only their JSON siblings).
+src/models/*.json
+src/core/memory-store.json
+src/skills/skills
+src/skills/.skill-tmp

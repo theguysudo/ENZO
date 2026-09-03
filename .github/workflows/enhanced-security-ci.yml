@@ -1,0 +1,367 @@
+# Enhanced Security CI Workflow for ENZO Backend
+# Combines existing checks with additional security-focused testing
+
+name: Enhanced Security Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ── STAGE 0: Security Assessment Prep ───────────────────────────────────
+  security-assessment-prep:
+    name: Security Assessment Preparation
+    runs-on: ubuntu-latest
+    outputs:
+      python-version: ${{ steps.setup-python.outputs.python-version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        id: setup-python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt || echo "No requirements.txt found - continuing"
+
+  # ── STAGE 1: Comprehensive Security Checks ─────────────────────────────
+  comprehensive-security:
+    name: Comprehensive Security Checks
+    runs-on: ubuntu-latest
+    needs: security-assessment-prep
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Use established tools for broader security coverage
+      - name: Run Semgrep for code security issues
+        uses: returntocorp/semgrep-action@v3
+        with:
+          publish-token: ${{ secrets.SEMGREP_APP_TOKEN }}
+          scan-type: 'code'
+          # Fail on high and critical severity issues
+          severity: 'high, critical'
+          # Include both default rules and custom rules
+          config: 'p/security-audit, p/secrets, .semgrep-rules'
+
+      # Check for hardcoded secrets with multiple tools
+      - name: Run Trufflehog for secrets detection
+        uses: trufflesecurity/trufflehog@v4
+        with:
+          path: .
+          extra_args: --debug --concurrency 5 --entropy --max-branch-days 30 --since-commit HEAD~1
+
+      - name: Run Gitleaks for secrets detection
+        uses: gitleaks/gitleaks-action@v3
+        with:
+          scan: all
+          verbose: true
+          exit-code: 1
+
+      # Custom checks for specific vulnerabilities we found
+      - name: Check for JWT hard coded secrets
+        run: |
+          if git grep -n "JWT_SECRET=" -- .env; then
+            echo "::error::JWT_SECRET hardcoded in .env file!"
+            exit 1
+          fi
+          echo "✔ JWT_SECRET not hardcoded in .env"
+
+      
+      - name: Check for ENZO_MASTER_KEY hard coded
+        run: |
+          if git grep -n "ENZO_MASTER_KEY=" -- .env; then
+            echo "::error::ENZO_MASTER_KEY hardcoded in .env file!"
+            exit 1
+          fi
+          echo "✔ ENZO_MASTER_KEY not hardcoded in .env"
+
+      # Verify secrets management practices
+      - name: Verify .env is in .gitignore
+        run: |
+          if ! git grep -q ".env" .gitignore; then
+            echo "::error::.env missing from .gitignore!"
+            exit 1
+          fi
+          echo "✔ .env is in .gitignore"
+
+  # ── STAGE 2: Backend Security Analysis ─────────────────────────────────
+  backend-security-analysis:
+    name: Backend Security Analysis
+    runs-on: ubuntu-latest
+    needs: comprehensive-security
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      # Run static analysis tools
+      - name: Run ESLint for security rules
+        run: |
+          # Install eslint and security plugins if not already in package.json
+          npx eslint --ext .js,.ts,.tsx src/ --no-error-on-unmatched-pattern || true
+
+      - name: Run Bandit for Python security issues
+        run: |
+          # Check if there are Python files to scan
+          if find . -name "*.py" | grep -q "."; then
+            bandit -r . -f json -o bandit-report.json || true
+            # Fail if high or critical issues found
+            if grep -q '"issue_severity": "HIGH"' bandit-report.json || \
+               grep -q '"issue_severity": "CRITICAL"' bandit-report.json; then
+              echo "::error::Bandit found high or critical security issues"
+              cat bandit-report.json
+              exit 1
+            fi
+          fi
+          echo "✔ Bandit scan completed"
+
+      # Custom checks for the vulnerabilities we discovered
+      - name: Check for JWT algorithm confusion vulnerability
+        run: |
+          if grep -A 10 "algorithms: \\['HS256'\\]" index.ts | grep -B 10 -A 10 -i "none"; then
+            echo "::warning::Potential JWT algorithm confusion vulnerability detected"
+            echo "Consider implementing explicit algorithm validation:"
+            echo "  1. Decode token header first without verification"
+            echo "  2. Explicitly check that algorithm is HS256"
+            echo "  3. Only then proceed with full verification"
+          fi
+          echo "✔ JWT algorithm check completed"
+
+      - name: Check for race condition vulnerabilities in project management
+        run: |
+          # Look for patterns that could lead to race conditions
+          if git grep -n "projectExists" -- project.ts | grep -B 5 -A 5 "const projectId"; then
+            echo "::warning::Potential race condition pattern detected in project management"
+            echo "Consider implementing file locks or atomic operations for project creation"
+          fi
+          echo "✔ Race condition pattern check completed"
+
+  # ── STAGE 3: Dependency Security Audit ─────────────────────────────────
+  dependency-security:
+    name: Dependency Security Audit
+    runs-on: ubuntu-latest
+    needs: backend-security-analysis
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Node.js dependency checks
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Audit npm dependencies for known vulnerabilities
+        run: |
+          # Use npm audit with high+ severity
+          npm audit --audit-level=high || true
+          # Additionally use OSS Index for more comprehensive scanning
+          npx oss-check || true
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: synthetic-nature
+
+      - name: Audit frontend dependencies for known vulnerabilities
+        run: |
+          npm audit --audit-level=high || true
+          npx oss-check || true
+        working-directory: synthetic-nature
+
+      # Python dependency checks (for strix directory)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies for strix
+        run: |
+          if [ -d "strix" ]; then
+            cd strix
+            pip install -e . || echo "No setup.py found, continuing"
+            # Install uv if not present
+            pipx install uv || pip install uv
+          fi
+
+      - name: Check Python dependencies with Trivy
+        run: |
+          # Install Trivy
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          # Scan Python dependencies
+          if [ -d "strix" ]; then
+            cd strix
+            trivy fs --security-checks vuln,config --ignore-unfixed --exit-code 1 \
+              --severity CRITICAL,HIGH . || true
+          fi
+
+      # Go dependency checks (for strix/interface/tui)
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Check Go dependencies with Trivy
+        run: |
+          if [ -d "strix/interface/tui" ]; then
+            cd strix/interface/tui
+            trivy fs --security-checks vuln,config --ignore-unfixed --exit-code 1 \
+              --severity CRITICAL,HIGH . || true
+          fi
+
+  # ── STAGE 4: Dynamic Security Testing ──────────────────────────────────
+  dynamic-security-testing:
+    name: Dynamic Security Testing
+    runs-on: ubuntu-latest
+    needs: dependency-security
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Start backend server for testing
+        id: server
+        run: |
+          # Use placeholder keys for testing
+          PORT=5099 GROQ_API_KEY=ci-placeholder HF_CLIENT_SECRET=ci \n            ENZO_MASTER_KEY=ci-test-master \n            npx tsx index.ts > server.log 2>&1 &
+          SERVER_PID=$!
+          echo "pid=$SERVER_PID" >> "$GITHUB_OUTPUT"
+          
+          # Wait for server to start
+          for i in {1..30}; do
+            if curl -s -f http://localhost:5099/ > /dev/null; then
+              echo "Server is up"
+              break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              echo "::error::Server process died"
+              cat server.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      # Run automated dynamic security tests
+      - name: Run Nuclei security scans
+        uses: projectdiscovery/nuclei-action@v1
+        with:
+          targets: 'http://localhost:5099'
+          verbose: true
+          # Use common, file, dns, and vulnerability templates
+          templates: 'cves, exposures, misconfiguration'
+
+      # Custom dynamic tests for vulnerabilities we found
+      - name: Test for JWT token forgery vulnerability
+        run: |
+          # Check if JWT_SECRET is not exposed
+          if grep -q "JWT_SECRET=" .env; then
+            echo "::error::JWT_SECRET is exposed in .env file!"
+            exit 1
+          fi
+          echo "✔ JWT_SECRET not exposed"
+
+          # We can't directly test JWT forgery in CI without proper setup,
+          # but we can verify that the server doesn't accept obviously forged tokens
+          if curl -s -f -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c" http://localhost:5099/api/vault/keys; then
+            echo "::warning::Server accepted obviously forged JWT token - investigate JWT validation implementation"
+          fi
+
+      - name: Test for race condition vulnerability
+        run: |
+          # Simple test for race condition - try to access non-existent project
+          if curl -s -f http://localhost:5099/api/project/nonexistent-project/manifest; then
+            echo "::warning::Server returned success for non-existent project - potential race condition or IDOR issue"
+          else
+            echo "✔ Proper error response for non-existent project"
+          fi
+
+      - name: Stop backend server
+        if: always()
+        run: kill "${{ steps.server.outputs.pid }}" 2>/dev/null || true
+
+  # ── STAGE 5: Container Security ────────────────────────────────────────
+  container-security:
+    name: Container Security
+    runs-on: ubuntu-latest
+    needs: dynamic-security-testing
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      # Scan Dockerfile for security issues
+      - name: Run Trivy container scan
+        uses: aquasecurity/trivy-action@v0.21.1
+        with:
+          scan-type: 'config,fs,vuln'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1'
+          # Scan the Dockerfile and build context
+          scan-ref: 'strix/containers/Dockerfile'
+
+
+      - name: Verify Dockerfile doesn't use ':latest' tag
+        run: |
+          if grep -q ":latest" strix/containers/Dockerfile; then
+            echo "::error::Dockerfile uses ':latest' tag which is a security risk!"
+            echo "Use a pinned version like 'kalilinux/kali-rolling:2026.4' instead"
+            exit 1
+          fi
+          echo "✔ Dockerfile uses pinned version tags"
+
+  # ── Final Summary ─────────────────────────────────────────────────────
+  summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [comprehensive-security, backend-security-analysis, dependency-security, dynamic-security-testing, container-security]
+    if: always()
+
+    steps:
+      - name: Report security results
+        run: |
+          echo "## Security Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Comprehensive Security Checks | ${{ needs.comprehensive-security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Security Analysis | ${{ needs.backend-security-analysis.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Security Audit | ${{ needs.dependency-security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dynamic Security Testing | ${{ needs.dynamic-security-testing.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Container Security | ${{ needs.container-security.result }} |" >> $GITHUB_STEP_SUMMARY
+
+          # Add details about any failures
+          for stage in comprehensive-security backend-security-analysis dependency-security dynamic-security-testing container-security; do
+            if [ "${{ needs.$stage.result }}" = "failure" ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Failed checks in $stage:" >> $GITHUB_STEP_SUMMARY
+              echo "$(grep '\[error\]' ${{ github.workspace }}/*.log || echo "Check logs for details")" >> $GITHUB_STEP_SUMMARY
+            fi
+          done

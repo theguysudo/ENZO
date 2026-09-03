@@ -1,0 +1,42 @@
+# ENZO — self-hosted, one command.
+#
+#   docker compose up -d          → http://localhost:5001
+#
+# This pulls the lite image (small, default themes only). Want all 23 video
+# themes? Set ENZO_IMAGE=ghcr.io/theguysudo/enzo:full before composing (or
+# edit `image:` below).
+#
+# Your data survives restarts and upgrades in named volumes:
+#   enzo-projects   generated coding projects
+#   enzo-skills     skills learned from GitHub repos
+#   enzo-memory     the agent's durable notes (data/memory-store.json)
+# Provider keys are entered in the web UI and stored encrypted in your
+# browser — never in these volumes, never in the image.
+
+services:
+  enzo:
+    # ENZO_IMAGE lets you switch editions without editing this file:
+    #   ENZO_IMAGE=ghcr.io/theguysudo/enzo:full docker compose up -d
+    image: ${ENZO_IMAGE:-ghcr.io/theguysudo/enzo:latest}
+    # Building from source instead of pulling (comment `image:` above):
+    #   build:
+    #     context: .
+    #     args:
+    #       THEME_VARIANT: full
+    ports:
+      - '5001:5001'
+    restart: unless-stopped
+    volumes:
+      - enzo-projects:/app/generated-projects
+      - enzo-skills:/app/src/skills/skills
+      - enzo-memory:/app/data
+    # Optional server-side env (all features work without any of these):
+    #   - ENZO_CORS_ORIGINS: extra origins allowed to call the API
+    #   - CLOUDFLARE_OAUTH_CLIENT_ID/_SECRET: "Connect with Cloudflare" button
+    #   - VITE_HF_CLIENT_ID / HF_CLIENT_SECRET: HuggingFace OAuth app
+    # Drop a .env next to this file and compose reads it automatically.
+
+volumes:
+  enzo-projects:
+  enzo-skills:
+  enzo-memory:

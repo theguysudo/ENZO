@@ -1,0 +1,432 @@
+name: CI
+
+# Triggers: every push to main + every PR targeting main
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ── STAGE 1: Security Checks ──────────────────────────────────────────────
+  security:
+    name: Security Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No hardcoded API key literals in tracked files
+        run: |
+          # Scan every tracked file except dependency lockfiles, build output
+          # and binary media. git grep exits 1 when there is NO match, so an
+          # empty result means "clean".
+          if git grep -nIE \
+            "(gsk_[A-Za-z0-9]{40,}|sk_[A-Za-z0-9]{20,}|sk-or-v1-[a-f0-9]+|oauth_app_secret_[A-Za-z0-9]+|nvapi-[A-Za-z0-9]{30,})" \
+            -- . \
+               ':(exclude)*package-lock.json' \
+               ':(exclude)*.lock' \
+               ':(exclude)*/dist/*' \
+               ':(exclude)*.mp4' \
+               ':(exclude)*.png' \
+               ':(exclude)*.jpg' \
+               ':(exclude)*.jpeg' \
+               ':(exclude)*.svg' \
+               ':(exclude)*.ico' \
+               ':(exclude)*.woff' \
+               ':(exclude)*.woff2' \
+               ':(exclude)*.webp' \
+               ':(exclude)*.gif' \
+               ':(exclude)*.zip'; then
+            echo "::error::Hardcoded API key literals detected in tracked files!"
+            exit 1
+          fi
+          echo "✔ No hardcoded key literals found in tracked files"
+
+      - name: .env not committed to git
+        run: |
+          if git ls-files .env | grep -q '.env'; then
+            echo "::error::.env file is tracked by git!"
+            exit 1
+          fi
+          echo "✔ .env is not committed"
+
+      - name: No personal PDFs or credential files tracked
+        run: |
+          if git ls-files | grep -qE '\.(pdf|rtf)$'; then
+            echo "::error::Personal PDF/RTF files found in git tracking!"
+            git ls-files | grep -E '\.(pdf|rtf)$'
+            exit 1
+          fi
+          echo "✔ No stray credential or personal files"
+
+      - name: marketplace_theme/ not tracked
+        run: |
+          if git ls-files marketplace_theme/ | grep -q .; then
+            echo "::error::marketplace_theme/ is still tracked (82MB duplicate)"
+            exit 1
+          fi
+          echo "✔ marketplace_theme/ correctly removed"
+
+      # Provider keys live in localStorage as AES-256-GCM ciphertext (see
+      # src/lib/keyVault.ts). Any site that goes back to raw localStorage for one
+      # would read `v1.gcm.…` and ship that string to a provider as an API key —
+      # a silent, key-shaped bug. keyVault.ts is the one file allowed to touch
+      # localStorage for these names, because it is what writes the ciphertext.
+      - name: Provider keys never read from raw localStorage
+        run: |
+          if git grep -nE "localStorage\.(get|set|remove)Item\((['\"\`])(enzo\.keys\.|enzo-[a-z0-9]+-key)" \
+            -- 'synthetic-nature/src' ':(exclude)synthetic-nature/src/lib/keyVault.ts'; then
+            echo "::error::Provider key read/written through raw localStorage — use keyVault instead"
+            exit 1
+          fi
+          echo "✔ All provider key access goes through keyVault"
+
+      # The onboarding gate is the product's only guarantee that a user has real
+      # keys before the app claims to be usable. A placeholder that satisfies it
+      # is a login bypass, so it must not come back.
+      - name: No onboarding bypass placeholders
+        run: |
+          if git grep -nE "test-bypass-key-value" -- . ':(exclude).github/workflows/ci.yml'; then
+            echo "::error::Onboarding bypass placeholder keys are back"
+            exit 1
+          fi
+          echo "✔ No onboarding bypass placeholders"
+
+  # ── STAGE 2: Backend CI ──────────────────────────────────────────────────
+  backend:
+    name: Backend — Module Load & API Check
+    runs-on: ubuntu-latest
+    needs: security
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      # Catches the class of bug that let a fatal `import './document-store.js'`
+      # for a non-existent module sit on main: tsx transpiles per-file and never
+      # resolves imports at build time, so only tsc sees it.
+      - name: TypeScript type-check
+        run: npm run typecheck
+
+      # Second half of the same fix: tsc only sees files that exist on disk, and
+      # CI's disk is the working tree. This asserts they are also in the index,
+      # which is the only thing a fresh `git clone` gets.
+      - name: Every imported file is tracked by git
+        run: npm run check:imports
+
+      # Both AES round-trips live here (crypto-store server-side, keyVault
+      # in-browser). CI ran neither until this step existed, which made the
+      # "security paths keep a runnable check" rule depend on somebody
+      # remembering to run it locally.
+      - name: Unit tests
+        run: npm test
+
+      - name: requireEnv guard exists
+        run: |
+          if ! grep -q "function requireEnv" index.ts; then
+            echo "::error::requireEnv() guard missing from index.ts"
+            exit 1
+          fi
+          echo "✔ requireEnv guard present"
+
+      - name: tunnel.ts has no hardcoded key fallbacks
+        run: |
+          if grep -qE "\|\|\s*'(gsk_|sk_|sk-or-v1-)" src/features/tunnel.ts; then
+            echo "::error::Hardcoded key fallbacks still present in src/features/tunnel.ts"
+            exit 1
+          fi
+          echo "✔ src/features/tunnel.ts clean"
+
+      # The server is pure BYOK: users supply provider keys per request, so it MUST
+      # boot with no GROQ_API_KEY (see optionalEnv in index.ts). A hard requireEnv on
+      # a provider key would break every hosted deploy at startup, so guard the
+      # keyless path instead of asserting the old "throws on missing key" contract.
+      - name: Backend startup — boots keyless (BYOK) with no provider key
+        run: |
+          output=$(GROQ_API_KEY="" HF_CLIENT_SECRET=ci PORT=5099 \
+            timeout 20 npx tsx index.ts 2>&1 || true)
+          if ! echo "$output" | grep -q "keyless BYOK mode"; then
+            echo "::error::Server did not report keyless BYOK mode without GROQ_API_KEY"
+            echo "$output"
+            exit 1
+          fi
+          if ! echo "$output" | grep -qE "listening|Backend ready"; then
+            echo "::error::Server failed to reach a listening state without a provider key"
+            echo "$output"
+            exit 1
+          fi
+          echo "✔ Backend boots keyless — BYOK deploys are not gated on a server key"
+
+      - name: Backend module load — starts successfully with valid env
+        run: |
+          output=$(GROQ_API_KEY=ci-placeholder HF_CLIENT_SECRET=ci PORT=5099 \
+            timeout 20 npx tsx index.ts 2>&1 || true)
+          if ! echo "$output" | grep -qE "listening|Backend ready|initialized"; then
+            echo "::error::Backend failed to start"
+            echo "$output"
+            exit 1
+          fi
+          echo "✔ Backend starts cleanly with GROQ_API_KEY set"
+          # loadBundledSkills() runs on the listening event, so this boot log is
+          # the only place a bad skills-bundled/ path shows up. The reorg into
+          # src/ broke it once and nothing failed — the library just went quiet.
+          if echo "$output" | grep -q "bundled-skills.*missing"; then
+            echo "::error::skills-bundled/ did not resolve — coding skills silently skipped"
+            echo "$output" | grep "bundled-skills"
+            exit 1
+          fi
+          echo "✔ skills-bundled/ resolves at boot"
+
+      - name: Structural integrity check
+        run: |
+          # 1. Required source / metadata files must be present. Paths are the
+          # post-reorg ones (sources under src/, docs under docs/). .env.example
+          # is tracked as a sanitized template (every value is a placeholder or
+          # a safe dev default — `cp .env.example .env` is step 1 of the README
+          # quick-start, which a fresh clone could otherwise not perform). The
+          # key-literal scan below fails CI if a real key shape ever lands in
+          # any tracked file, including this one.
+          for f in index.ts src/features/tunnel.ts src/agent/search.ts \
+                   src/models/model-sync.ts src/core/env-manager.ts \
+                   .env.example package.json docs/AGENTS.md docs/CHANGELOG.md; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Required file missing: $f"
+              exit 1
+            fi
+          done
+          echo "✔ All required files present"
+
+          # 2. package.json must be valid JSON.
+          if ! node -e "JSON.parse(require('fs').readFileSync('package.json','utf8'))"; then
+            echo "::error::package.json does not parse"
+            exit 1
+          fi
+          echo "✔ package.json parses"
+
+          # 3. Writes should stay confined to the persistence modules (WARN only).
+          OFFENDERS=$(git grep -nE 'fs\.writeFileSync' -- '*.ts' \
+            ':(exclude)src/core/env-manager.ts' ':(exclude)src/models/model-sync.ts' || true)
+          if [ -n "$OFFENDERS" ]; then
+            echo "::warning::fs.writeFileSync outside env-manager/model-sync:"
+            echo "$OFFENDERS"
+          else
+            echo "✔ fs.writeFileSync confined to env-manager/model-sync"
+          fi
+
+  # ── STAGE 2b: Dependency audit — FAIL on high/critical (backend + frontend)
+  deps:
+    name: Dependency Audit — High/Critical Vulns
+    runs-on: ubuntu-latest
+    needs: security
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Audit backend dependencies (high+)
+        run: npm audit --audit-level=high
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: synthetic-nature
+
+      - name: Audit frontend dependencies (high+)
+        run: npm audit --audit-level=high
+        working-directory: synthetic-nature
+
+  # ── STAGE 2c: Black-box security pentest ──────────────────────────────────
+  pentest:
+    name: Security Pentest — Black Box
+    runs-on: ubuntu-latest
+    needs: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Start backend server
+        id: server
+        run: |
+          PORT=5098 GROQ_API_KEY=ci-placeholder-key HF_CLIENT_SECRET=ci \
+            ENZO_MASTER_KEY=ci-test-master \
+            npx tsx index.ts > server.log 2>&1 &
+          SERVER_PID=$!
+          echo "pid=$SERVER_PID" >> "$GITHUB_OUTPUT"
+          # Wait (≤30s) for the server to answer any HTTP status on the catalog.
+          code="000"
+          for i in $(seq 1 60); do
+            code=$({ curl -s -o /dev/null -w '%{http_code}' --max-time 2 \
+              http://localhost:5098/api/v1/models 2>/dev/null || echo 000; } | tail -c 3)
+            if [ "$code" != "000" ]; then break; fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              echo "::error::Server process exited during boot"; cat server.log; exit 1
+            fi
+            sleep 0.5
+          done
+          if [ "$code" = "000" ]; then
+            echo "::error::Server did not answer within 30s (HTTP $code)"
+            cat server.log
+            exit 1
+          fi
+          echo "Server is up after ~$((i/2))s (HTTP $code)"
+
+      - name: Run black-box security pentest
+        run: ENZO_MASTER_KEY=ci-test-master bash scripts/pentest.sh --base http://localhost:5098
+
+      - name: Stop backend server
+        if: always()
+        run: kill "${{ steps.server.outputs.pid }}" 2>/dev/null || true
+
+  # ── STAGE 3: Frontend CI ─────────────────────────────────────────────────
+  frontend:
+    name: Frontend — TypeScript + Vite Build
+    runs-on: ubuntu-latest
+    needs: security
+    defaults:
+      run:
+        working-directory: synthetic-nature
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: synthetic-nature/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: TypeScript strict type-check
+        run: npx tsc --noEmit
+
+      - name: Vite production build
+        run: npm run build
+
+      - name: Verify dist output exists
+        run: |
+          test -f dist/index.html
+          find dist/assets/ -name "*.js" | grep -q .
+          find dist/assets/ -name "*.css" | grep -q .
+          echo "✔ dist/index.html, JS bundle, and CSS all present"
+
+      - name: Check JS bundle size (warn if > 500 KB gzipped)
+        run: |
+          SIZE=$(find dist/assets/ -name "*.js" -exec gzip -c {} \; | wc -c)
+          SIZE_KB=$((SIZE / 1024))
+          echo "Gzipped JS bundle: ${SIZE_KB} KB"
+          if [ "$SIZE_KB" -gt 500 ]; then
+            echo "::warning::JS bundle is ${SIZE_KB} KB gzipped — consider code splitting"
+          fi
+
+      - name: Upload production build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ github.sha }}
+          path: synthetic-nature/dist/
+          retention-days: 14
+
+  # ── STAGE 4: Repo Hygiene ────────────────────────────────────────────────
+  hygiene:
+    name: Repo Hygiene
+    runs-on: ubuntu-latest
+    needs: security
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: No unexpected large binary files tracked (> 300 MB)
+        run: |
+          LARGE=""
+          for f in $(git ls-files); do
+            case "$f" in
+              synthetic-nature/public/*|*.mp4) continue ;;
+            esac
+            if [ -f "$f" ]; then
+              size=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null || echo 0)
+              if [ "$size" -gt 314572800 ]; then
+                LARGE="$LARGE\n$f ($((size/1024/1024)) MB)"
+              fi
+            fi
+          done
+          if [ -n "$LARGE" ]; then
+            echo "::error::Unexpected large files found in git:"
+            echo -e "$LARGE"
+            exit 1
+          fi
+          echo "✔ No unexpected files > 300 MB tracked"
+
+      - name: CI workflow file present
+        run: |
+          test -f .github/workflows/ci.yml
+          echo "✔ .github/workflows/ci.yml exists"
+
+      - name: CHANGELOG is present and usefully filled out
+        run: |
+          if [ ! -f docs/CHANGELOG.md ]; then
+            echo "::error::docs/CHANGELOG.md missing"
+            exit 1
+          fi
+          if [ ! -s docs/CHANGELOG.md ]; then
+            echo "::error::docs/CHANGELOG.md is empty"
+            exit 1
+          fi
+          if ! grep -qE '^## \[20[0-9]{2}-' docs/CHANGELOG.md; then
+            echo "::error::docs/CHANGELOG.md has no dated entry (expected a '## [YYYY-MM-DD]' heading)"
+            exit 1
+          fi
+          echo "✔ docs/CHANGELOG.md exists, is non-empty, and has a dated entry"
+
+      - name: AGENTS.md present
+        run: |
+          if [ ! -f docs/AGENTS.md ]; then
+            echo "::error::docs/AGENTS.md missing (project agent guide)"
+            exit 1
+          fi
+          echo "✔ docs/AGENTS.md exists"
+
+  # ── Summary job (runs after all stages) ─────────────────────────────────
+  summary:
+    name: Pipeline Summary
+    runs-on: ubuntu-latest
+    needs: [security, backend, deps, pentest, frontend, hygiene]
+    if: always()
+
+    steps:
+      - name: Report results
+        run: |
+          echo "## CI Pipeline Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Checks | ${{ needs.security.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend Module Load | ${{ needs.backend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dependency Audit | ${{ needs.deps.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security Pentest | ${{ needs.pentest.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend Build | ${{ needs.frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Repo Hygiene | ${{ needs.hygiene.result }} |" >> $GITHUB_STEP_SUMMARY

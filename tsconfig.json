@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "esnext",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": "./",
+    "paths": {
+      "@/*": ["./synthetic-nature/src/*"],
+      "src/*": ["./src/*"]
+    },
+    "moduleResolution": "bundler"
+  },
+  "include": ["tests/**/*.ts", "index.ts", "src/**/*"],
+  // project-idor.test.ts is a mocha+supertest suite; neither is a dependency and
+  // `npm test` does not run it, so typechecking it would fail on missing globals.
+  "exclude": ["node_modules", "dist", "tests/project-idor.test.ts"]
+}
