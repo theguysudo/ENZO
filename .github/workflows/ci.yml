@@ -353,6 +353,10 @@ jobs:
       # full dist: dist/background_elements is ~292MB of videos copied from
       # public/ at build time — uploading them on every push piled up ~9.4GB
       # of artifacts and hit the account storage quota, failing this job.
+      # Non-blocking: nothing downstream consumes this artifact (deploy builds
+      # dist from the repo), and the account storage quota is recalculated by
+      # GitHub every 6-12h — right after bulk-deleting stale artifacts this
+      # step can still report "quota hit" for hours even at 5 files.
       - name: Upload production build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -361,6 +365,7 @@ jobs:
             synthetic-nature/dist/index.html
             synthetic-nature/dist/assets/
           retention-days: 14
+        continue-on-error: true
 
   # ── STAGE 4: Repo Hygiene ────────────────────────────────────────────────
   hygiene:
