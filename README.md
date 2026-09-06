@@ -1,8 +1,9 @@
 # ENZO
 
 <p align="center">
-  <img src="docs/assets/key-flow.svg" alt="Keys are sealed in your browser with AES-256-GCM; the ENZO server stores none of them and only relays requests to your chosen provider" width="720">
+  <img src="docs/assets/promo.jpg" alt="Keys are sealed in your browser with AES-256-GCM and attached per-request — the ENZO server is a relay that stores none of them, and no middleman sits between you and your provider" width="720">
 </p>
+
 <p align="center">
   <img src="docs/assets/enzo-demo.gif" alt="60-second no-cut demo: paste your provider key (masked), chat streams a real Groq answer, search the unified model catalog, describe a task once and ENZO drafts the agent's operating manual with the live key, then runs it" width="720">
 </p>
