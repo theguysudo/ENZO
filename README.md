@@ -14,6 +14,9 @@ A self-hostable, bring-your-own-key AI workspace — chat with 300+ models, rese
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Ftheguysudo%2Fenzo-2496ed)](#quickstart)
 [![Models](https://img.shields.io/badge/models-300%2B-58d68d)](#quickstart)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-BYOK-purple)](#why-enzo)
+[![stars](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftheguysudo%2FENZO%2Fmain%2Ftraffic%2Fstars.json)](https://github.com/theguysudo/ENZO/stargazers)
+[![unique visitors](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftheguysudo%2FENZO%2Fmain%2Ftraffic%2Funique-views.json)](https://github.com/theguysudo/ENZO/blob/main/TRAFFIC.md)
+[![unique cloners](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftheguysudo%2FENZO%2Fmain%2Ftraffic%2Funique-clones.json)](https://github.com/theguysudo/ENZO/blob/main/TRAFFIC.md)
 
 ```bash
 docker compose up -d
@@ -53,6 +56,7 @@ Most "AI workspaces" hold your keys, meter your usage, or need a subscription to
 - **Honest provenance** — every agent records which model actually drafted it; when nothing was reachable, it says so instead of pretending.
 - **~20 hardening fixes** across the terminal, agents UI and onboarding — research steps survive interrupted streams, tab switches no longer lose agent conversations, agent runs carry full conversation history (multi-turn confirm flows complete), reasoning models get proper token headroom, and the Google AI Studio key is fully optional in the self-hosted edition.
 - Full changelog: [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
+- Adoption stats (views, clones, referrers — updated weekly): [`TRAFFIC.md`](TRAFFIC.md).
 
 ## Quickstart
 

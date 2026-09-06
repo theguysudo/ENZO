@@ -1,5 +1,14 @@
 # ENZO Project Changelog
 
+## [2026-09-06] — Public traffic dashboard: TRAFFIC.md archive + live README badges
+
+GitHub's traffic API keeps only 14 days of data and shows it only to users with push access — a public repo's adoption numbers were invisible to everyone else. The public repo now displays them itself:
+
+- **`scripts/traffic-render.py`**: fetches views/clones/referrers/stars, writes a rolling `TRAFFIC.md` archive (per-day table, 14-day totals, top referrers, weekly history with idempotent snapshot replacement) and shields.io `endpoint` badge JSONs into `traffic/` (stars, unique views, unique cloners, totals). Never-throw per endpoint; colors scale with the count. Live-tested against the real API (found and fixed a docs-vs-payload referrer field mismatch: `name` vs `referrer`).
+- **`.github/workflows/traffic.yml`** (public repo only, overlaid by `make-docker-release.sh` from `deploy/docker-variant/traffic-workflow.yml`): weekly Monday 06:00 UTC cron + manual dispatch; runs the render script with the Actions token and commits any change as `enzo-traffic-bot`. Hard guard: the job skips itself unless `github.repository == 'theguysudo/ENZO'`, so the private dev repo can never display its own traffic.
+- **Release-sync protection**: `make-docker-release.sh` excludes `TRAFFIC.md`, `traffic/` and the workflow from its `rsync --delete`, so a release sync can never wipe the bot's committed history.
+- **README**: live badge row (stars / unique visitors / unique cloners) linking to the stargazers page and `TRAFFIC.md`, plus a pointer in the "What's new" section.
+
 ## [2026-09-06] — Overnight full-stack audit: 20 verified fixes across agents, onboarding and the terminal
 
 A code audit of every agent-flow, onboarding and terminal surface — each finding verified by fresh read before fixing, and every fix verified by `tsc --noEmit` (both trees) + the full 10-file test suite (run twice) + a fresh `vite build` whose bundle was live-verified on the restarted :5001.
