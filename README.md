@@ -2,7 +2,7 @@
 
 > When you send a message, the request goes from your browser through ENZO to the provider you picked, and you pay that provider their normal price. **Nothing sits in between taking a cut.**
 
-A self-hostable, bring-your-own-key AI workspace — chat with 300+ models, research, code-gen with live preview, and a local agent with durable memory. All keys stay in *your* browser, encrypted; this server stores none of them.
+A self-hostable, bring-your-own-key AI workspace — chat with 300+ models, research, code-gen with live preview, **custom agents that draft and train themselves**, and a local agent with durable memory. All keys stay in *your* browser, encrypted; this server stores none of them.
 
 ```bash
 docker compose up -d
@@ -32,6 +32,18 @@ Open http://localhost:5001, press **Login**, and pick any provider:
 | Groq, HuggingFace, Cloudflare, Gemini | API key / OAuth | varies |
 
 Keys are saved encrypted in your browser (passphrase-protected vault, with a recovery file you can download). The server never sees them — requests are relayed with your key attached, and you can wipe them anytime from the Vault.
+
+On a fresh self-hosted instance the **first live-validated key you paste claims the instance** — it's written to the container `.env` and sealed (AES-256-GCM) into the `enzo-memory` volume, so every server-side feature (agents, skills, memory) unlocks immediately and survives restarts. No master key to configure, no setup wizard — paste a working key and go. (Pre-seed a provider key in compose env instead if you'd rather not have the claim window at all.)
+
+## What's new in v1.1.0
+
+- **Custom Agent Builder** — describe a task in plain English ("an agent that researches MUN country positions") and it builds itself: a two-pass drafter analyzes the domain, then a free model from *your own* providers writes a 30-year-veteran operating manual (tacit knowledge, decision heuristics, edge cases). You can also create agents straight from chat ("create an agent that…").
+- **Self-improving agents (neural layer)** — every agent keeps learning from your platform activity, whether you run it or not: a per-agent neural weight vector folds in domain-matched traffic every 90s, deep-tunes lessons into memory on a cadence, and injects a live NEURAL FOCUS block into every run. Watch it in the agent's **Neural** tab and train it on demand.
+- **Race drafting** — when a draft needs a model, ~10 free candidates fire at once and the first to answer wins; a brain-health scoreboard remembers which models actually work and reorders future races. Dead/failing free-tier models can no longer collapse a draft to a generic template.
+- **First-key claim bootstrap** (described above) — a fresh `docker compose up` unlocks the full platform from the web UI alone.
+- **Honest provenance** — every agent records which model actually drafted it; when nothing was reachable, it says so instead of pretending.
+- **~20 hardening fixes** across the terminal, agents UI and onboarding — research steps survive interrupted streams, tab switches no longer lose agent conversations, agent runs carry full conversation history (multi-turn confirm flows complete), reasoning models get proper token headroom, and the Google AI Studio key is fully optional in the self-hosted edition.
+- Full changelog: [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ## Two editions
 

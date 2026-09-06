@@ -61,20 +61,23 @@ async function main() {
   assert.strictEqual(isSelfHostedInstance(), true, 'a set master key implies self-hosted');
 
   // 2. Boot: keys restore from the sealed store into a bare env.
-  persistClaimedKey('openrouter', 'sk-or-v1-claimed-key-value-aaaaaaaa');
+  // (Fixture key follows the keyVault.test.ts convention: the first char
+  // after the sk-or-v1- prefix is a NON-hex uppercase letter, so the CI
+  // secret scanner's sk-or-v1-[a-f0-9]+ pattern can never match it.)
+  persistClaimedKey('openrouter', 'sk-or-v1-EXAMPLE-ONLY-claimed-key');
   initVaultBoot();
-  assert.strictEqual((process.env.OPENROUTER_API_KEY || '').trim(), 'sk-or-v1-claimed-key-value-aaaaaaaa', 'claimed key must be restored into process.env');
+  assert.strictEqual((process.env.OPENROUTER_API_KEY || '').trim(), 'sk-or-v1-EXAMPLE-ONLY-claimed-key', 'claimed key must be restored into process.env');
   assert.strictEqual(serverHoldsNoProviderKeys(), false, 'restored key counts as holding a provider key');
   assert.strictEqual(fs.existsSync(path.join(VAULT_DATA_DIR, 'vault-keys.json')), true, 'sealed operator-key file must exist');
 
   // 3. The sealed store must not contain the key in plaintext.
   const rawKeys = fs.readFileSync(path.join(VAULT_DATA_DIR, 'vault-keys.json'), 'utf-8');
-  assert.ok(!rawKeys.includes('sk-or-v1-claimed-key-value'), 'claimed key must not appear in plaintext on disk');
-  assert.deepStrictEqual(readSecretFile(path.join(VAULT_DATA_DIR, 'vault-keys.json')), { openrouter: 'sk-or-v1-claimed-key-value-aaaaaaaa' }, 'sealed store must round-trip');
+  assert.ok(!rawKeys.includes('sk-or-v1-EXAMPLE-ONLY'), 'claimed key must not appear in plaintext on disk');
+  assert.deepStrictEqual(readSecretFile(path.join(VAULT_DATA_DIR, 'vault-keys.json')), { openrouter: 'sk-or-v1-EXAMPLE-ONLY-claimed-key' }, 'sealed store must round-trip');
 
   // 4. Restore is overridden by the real environment.
   process.env.OPENROUTER_API_KEY = 'sk-or-v1-real-env-wins-over-store';
-  persistClaimedKey('openrouter', 'sk-or-v1-claimed-key-value-aaaaaaaa'); // re-seal the same value
+  persistClaimedKey('openrouter', 'sk-or-v1-EXAMPLE-ONLY-claimed-key'); // re-seal the same value
   initVaultBoot(); // no-op (booted flag), but the restore rule is per-read: simulate a fresh module instead
   const fresh = await import('../src/core/vault-boot.js'); // same module instance — so test the rule by hand:
   assert.strictEqual((fresh as any).serverHoldsNoProviderKeys(), false, 'still holding the env-set key');
