@@ -775,6 +775,9 @@ body {
   z-index: 0;
   overflow: hidden;
   background: #000;
+  /* Decorative background: never intercept pointer input meant for the
+     content layers above. Pan listens on window, so this loses nothing. */
+  pointer-events: none;
   /* Isolate as its own paint/compositing layer so document scroll
      never forces this fixed WebGL layer to repaint. */
   contain: layout paint;

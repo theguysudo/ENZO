@@ -69,6 +69,7 @@ import { startModelSync, syncModels, tryReadNvidiaKey } from 'src/models/model-s
 import { readModelCache } from 'src/models/model-sync.js';
 import { startHealthMonitor, getHealthStore, probeModelHealth, recordModelFailure } from 'src/models/health.js';
 import { getVaultEnvKeys, readEnvFile, saveVaultKeysToEnv, VAULT_TO_ENV_MAP } from 'src/core/env-manager.js';
+import { initVaultBoot, isSelfHostedInstance, serverHoldsNoProviderKeys, persistClaimedKey, CLAIMABLE_PROVIDERS } from 'src/core/vault-boot.js';
 import { runAgentLoop, type ToolCtx, type ProviderConfig, findMatchingDraft } from 'src/agent/agent-tools.js';
 import { buildMemoryContext, recordMemory, getMemoryEntries, clearMemory, rememberFact, forgetMemory, getFacts, isRememberIntent, extractFactFromMessage, isForgetIntent, extractForgetQuery, isListMemoryIntent, isContinueIntent } from 'src/core/memory.js';
 import { listSkills, getSkill, deleteSkill, learnSkillFromRepo, importBundledSkillsFromRepo, buildSkillContext, SkillSignalFilter, extractRepoUrl } from 'src/skills/skills.js';
@@ -82,6 +83,13 @@ import { extractProjectFiles, verifyProject, buildRepairContext, renderBuildRepo
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Self-hosted bootstrap — generates ENZO_MASTER_KEY when a self-hosted
+// instance boots without one and restores keys claimed in a previous life of
+// the instance. Must run before anything reads ENZO_MASTER_KEY at module
+// scope (the const below is the first such read). Hosted/keyless boots are
+// a no-op: no master key is generated and nothing is restored.
+initVaultBoot();
 
 const app = express();
 
@@ -192,7 +200,12 @@ function rateLimit(bucket: string, maxPerMin: number) {
 // ── Load .env file into memory at boot ────────────────────────────────────────
 const initialFileKeys = readEnvFile();
 for (const [k, v] of Object.entries(initialFileKeys)) {
-  if (!process.env[k] && v) {
+  // `undefined` check, not truthiness — the CI keyless-boot check boots with
+  // GROQ_API_KEY= (set but empty) to prove hosted BYOK mode works, and an
+  // explicitly-empty value must not be backfilled from the file. load-env.ts
+  // (first import) already ran with this same precedence; this loop only
+  // catches vars it could not have set.
+  if (process.env[k] === undefined && v) {
     process.env[k] = v;
   }
 }
@@ -499,7 +512,7 @@ function resolveModelRoute(chosenModel: string, chatMode: string): ModelRoute {
 
   if (chosenModel === 'claude') {
     return applyModeToRoute({
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b', // live-verified 2026-09-06 — llama-3.3-70b delisted
       maxTokens: 1536,
       systemExtra: CLAUDE_STYLE_PROMPT,
     }, chatMode);
@@ -512,11 +525,11 @@ function resolveModelRoute(chosenModel: string, chatMode: string): ModelRoute {
   }
 
   if (chosenModel === 'llama-70b') {
-    return applyModeToRoute({ model: 'llama-3.3-70b-versatile', maxTokens: 1024 }, chatMode);
+    return applyModeToRoute({ model: 'openai/gpt-oss-120b', maxTokens: 1024 }, chatMode); // live-verified 2026-09-06 — llama-3.3-70b delisted
   }
 
   if (chosenModel === 'groq-instant') {
-    return applyModeToRoute({ model: 'llama-3.1-8b-instant', maxTokens: 512 }, chatMode);
+    return applyModeToRoute({ model: 'openai/gpt-oss-20b', maxTokens: 900 }, chatMode); // live-verified 2026-09-06 — llama-3.1-8b-instant delisted
   }
 
   if (chosenModel === 'minimax') {
@@ -565,10 +578,11 @@ function resolveModelRoute(chosenModel: string, chatMode: string): ModelRoute {
   const modeExtra = getModeSystemExtra(chatMode);
 
   if (chatMode === 'research') {
-    // llama-3.3-70b follows long-context instructions faithfully and handles
-    // the injected [RESEARCH CONTEXT] well.
+    // gpt-oss-120b follows long-context instructions faithfully and handles
+    // the injected [RESEARCH CONTEXT] well (live-verified 2026-09-06 — the
+    // llama models are delisted from Groq).
     return {
-      model: 'llama-3.3-70b-versatile',
+      model: 'openai/gpt-oss-120b',
       maxTokens: 4096,
       systemExtra: modeExtra,
     };
@@ -767,7 +781,7 @@ app.post('/api/research-plan', async (req, res) => {
     const today = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const groq = new Groq({ apiKey: getChatApiKey() });
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
+      model: 'openai/gpt-oss-20b', // live-verified json mode (2026-09-06) — llama-3.1-8b-instant delisted
       messages: [
         {
           role: 'system',
@@ -776,7 +790,7 @@ app.post('/api/research-plan', async (req, res) => {
         { role: 'user', content: `Research question: "${query}"` },
       ],
       temperature: 0.4,
-      max_tokens: 400,
+      max_tokens: 900, // reasoning model: ~600 reasoning tokens before the JSON
       response_format: { type: 'json_object' },
     });
     const raw = completion.choices[0]?.message?.content ?? '{}';
@@ -984,7 +998,7 @@ app.post('/api/deep-research', async (req, res) => {
     sse({ type: 'phase', phase: 'formulating', message: 'Decomposing query into research vectors…' });
 
     const planResp = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
+      model: 'openai/gpt-oss-20b', // live-verified json mode (2026-09-06) — llama-3.1-8b-instant delisted
       messages: [
         {
           role: 'system',
@@ -993,7 +1007,7 @@ app.post('/api/deep-research', async (req, res) => {
         { role: 'user', content: `Research: "${query}"` },
       ],
       temperature: 0.35,
-      max_tokens: 600,
+      max_tokens: 900, // gpt-oss: ~600 reasoning tokens before the JSON
       response_format: { type: 'json_object' },
     });
 
@@ -1016,7 +1030,7 @@ app.post('/api/deep-research', async (req, res) => {
       let gapQueries: string[] = [];
       try {
         const gapResp = await groq.chat.completions.create({
-          model: 'llama-3.1-8b-instant',
+          model: 'openai/gpt-oss-20b', // live-verified json mode (2026-09-06) — llama-3.1-8b-instant delisted
           messages: [
             {
               role: 'system',
@@ -1027,7 +1041,7 @@ app.post('/api/deep-research', async (req, res) => {
               content: `Original question: "${query}"\n\nSources found (${allSources.length} total, sample):\n${allSources.slice(0, 12).map((s) => `- ${s.title}: ${s.desc.slice(0, 120)}`).join('\n')}`,
             },
           ],
-          max_tokens: 400,
+          max_tokens: 900, // gpt-oss: ~600 reasoning tokens before the JSON
           temperature: 0.3,
           response_format: { type: 'json_object' },
         });
@@ -1062,7 +1076,7 @@ app.post('/api/deep-research', async (req, res) => {
       let entityQueries: string[] = [];
       try {
         const entResp = await groq.chat.completions.create({
-          model: 'llama-3.1-8b-instant',
+          model: 'openai/gpt-oss-20b', // live-verified json mode (2026-09-06) — llama-3.1-8b-instant delisted
           messages: [
             {
               role: 'system',
@@ -1073,7 +1087,7 @@ app.post('/api/deep-research', async (req, res) => {
               content: `Topic: "${query}"\nAlready have ${allSources.length} sources covering: ${allSources.slice(0, 8).map((s) => s.title).join(', ')}`,
             },
           ],
-          max_tokens: 300,
+          max_tokens: 900, // gpt-oss: ~600 reasoning tokens before the JSON
           temperature: 0.2,
           response_format: { type: 'json_object' },
         });
@@ -1150,7 +1164,7 @@ app.post('/api/meme', async (req, res) => {
 
   try {
     const completion = await getGroqMeme(userGroqKey).chat.completions.create({
-      model: 'llama-3.1-8b-instant',
+      model: 'openai/gpt-oss-20b', // live-verified (2026-09-06) — llama-3.1-8b-instant delisted
       messages: [
         {
           role: 'system',
@@ -1162,7 +1176,7 @@ app.post('/api/meme', async (req, res) => {
         },
         { role: 'user', content: `Roast this prompt: "${message.slice(0, 200)}"` },
       ],
-      max_tokens: 60,
+      max_tokens: 700, // gpt-oss: ~600 reasoning tokens (separate field) before the JSON
       temperature: 1.35,
     });
 
@@ -1442,10 +1456,34 @@ app.post('/api/vault/session', rateLimit('vault', 20), async (req, res) => {
     const { provider, key } = req.body || {};
     const envVar = typeof provider === 'string' ? VAULT_TO_ENV_MAP[provider] : undefined;
     const provided = (key ?? '').toString().trim();
-    if (!envVar || !provided || !safeKeyEqual(provided, (process.env[envVar] || '').trim())) {
+    if (!envVar || !provided) {
       res.status(403).json({ error: 'invalid_provider_key' });
       return;
     }
+
+    // ── First-key claim (self-hosted bootstrap) ─────────────────────────────
+    // A fresh instance — docker compose up, web UI only, no .env seeded — can
+    // never satisfy the strict match below: no key is in .env, so no key can
+    // match. This branch lets the FIRST live-validated key claim the instance
+    // (see vault-boot.ts for the security reasoning). It closes for good the
+    // moment the server holds any provider key.
+    if (!safeKeyEqual(provided, (process.env[envVar] || '').trim())) {
+      if (!isSelfHostedInstance() || !serverHoldsNoProviderKeys() || !(CLAIMABLE_PROVIDERS as readonly string[]).includes(provider)) {
+        res.status(403).json({ error: 'invalid_provider_key' });
+        return;
+      }
+      const check = await validateProviderKey(provider, provided);
+      if (!check.valid) {
+        // The offer isn't a real working key — never claim with it, and say
+        // why so the operator pasting a typo isn't stuck guessing.
+        res.status(403).json({ error: 'invalid_provider_key', detail: check.detail || 'key rejected by provider' });
+        return;
+      }
+      saveVaultKeysToEnv({ [provider]: provided });
+      persistClaimedKey(provider, provided);
+      console.log(`[vault] instance claimed via first ${provider} key entered in the web UI`);
+    }
+
     const token = vaultSessionToken();
     if (!token) {
       res.status(503).json({ error: 'vault_session_unavailable' });
@@ -1849,8 +1887,12 @@ const VAULT_TOKEN_WINDOW_MS = 12 * 60 * 60 * 1000;
 function vaultTokenForWindow(window: number): string | null {
   const groqKey = (process.env.GROQ_API_KEY || '').trim();
   const masterKey = (ENZO_MASTER_KEY || '').trim();
-  if (!groqKey || !masterKey) return null;
-  return crypto.createHmac('sha256', masterKey).update(`enzo-vault:${groqKey}:${window}`).digest('hex');
+  if (!masterKey) return null;
+  // Groq key present → the original groq-bound formula (rotating GROQ_API_KEY
+  // revokes every vault session). Absent → instance formula, so a fresh
+  // install that claimed e.g. an OpenRouter key still mints. See vault-boot.ts.
+  const message = groqKey ? `enzo-vault:${groqKey}:${window}` : `enzo-vault:instance:${window}`;
+  return crypto.createHmac('sha256', masterKey).update(message).digest('hex');
 }
 
 /** Mint a token for the current window (what /api/vault/session hands out). */
@@ -2192,7 +2234,7 @@ function buildPickerConfigs(groqKey: string, activeKeys: Record<string, any>, fa
     );
     if (verifiedFreeLlm7) push('llm7', String(verifiedFreeLlm7.id).replace(/^llm7\//, ''), String(activeKeys.llm7));
   }
-  if (groqKey) push('groq', 'llama-3.1-8b-instant', groqKey);
+  if (groqKey) push('groq', 'openai/gpt-oss-20b', groqKey); // live-verified 2026-09-06 — llama-3.1-8b-instant delisted
   // Google Gemini and Puter are both keyed, OpenAI-compatible providers. Free
   // access exists on both (free Flash tier / user-pays credits), so they're
   // viable last-resort deciders — but only when the user has the key.
@@ -2665,7 +2707,7 @@ function getFallbackQueue(modelId: string): RouteTry[] {
     return [
       { provider: primaryProvider, model: targetModel },
       { provider: 'pollinations', model: 'minimax-m3' },
-      { provider: 'groq', model: 'llama-3.3-70b-versatile' },
+      { provider: 'groq', model: 'openai/gpt-oss-120b' },
     ];
   }
 
@@ -2674,8 +2716,8 @@ function getFallbackQueue(modelId: string): RouteTry[] {
   // Route Llama 70B across Groq, OpenRouter, and Pollinations fallback
   if (cleanId.includes('llama-3.3-70b') || cleanId.includes('llama-70b') || cleanId.includes('versatile')) {
     return [
-      { provider: 'groq', model: 'llama-3.3-70b-versatile' },
-      { provider: 'openrouter', model: 'meta-llama/llama-3.3-70b-instruct:free' },
+      { provider: 'groq', model: 'openai/gpt-oss-120b' }, // live-verified 2026-09-06 — llama-3.3-70b delisted
+      { provider: 'openrouter', model: 'z-ai/glm-5.2:free' },
       { provider: 'pollinations', model: 'minimax-m3' }
     ];
   }
@@ -2697,7 +2739,7 @@ function getFallbackQueue(modelId: string): RouteTry[] {
   const primary: RouteTry = { provider: primaryProvider, model: resolved.model };
 
   if (primaryProvider === 'pollinations') {
-    return [primary, { provider: 'groq', model: 'llama-3.3-70b-versatile' }];
+    return [primary, { provider: 'groq', model: 'openai/gpt-oss-120b' }];
   }
 
   // Default fallback tries the resolved primary model, then Pollinations, then
@@ -2705,7 +2747,7 @@ function getFallbackQueue(modelId: string): RouteTry[] {
   return [
     primary,
     { provider: 'pollinations', model: 'minimax-m3' },
-    { provider: 'groq', model: 'llama-3.3-70b-versatile' },
+    { provider: 'groq', model: 'openai/gpt-oss-120b' },
   ];
 }
 
@@ -3361,7 +3403,7 @@ app.post('/api/chat', verifyMasterKeyOptional, async (req, res) => {
         agentApiKey = activeKeys.openrouter as string;
       } else if (effectiveGroqKey) {
         agentProvider = 'groq';
-        agentModel = 'llama-3.3-70b-versatile';
+        agentModel = 'openai/gpt-oss-20b'; // live-verified 2026-09-06 — llama-3.3-70b delisted
         agentApiKey = effectiveGroqKey;
       }
     }
@@ -3499,7 +3541,7 @@ Do NOT ask for details again. Do NOT respond with text. CALL THE TOOL IMMEDIATEL
         // Groq model, so a Groq outage no longer dead-ends the retry. Only when
         // autoFallback is on: with the toggle off the user's chosen model is the
         // contract, so a failure is surfaced instead of silently swapped.
-        if (autoFallback && !handled && (agentProvider !== 'groq' || agentModel !== 'llama-3.3-70b-versatile')) {
+        if (autoFallback && !handled && (agentProvider !== 'groq' || agentModel !== 'openai/gpt-oss-20b')) {
           let fallbackConfig: ProviderConfig | null = null;
 
           const picked = await pickSmartFallbackRoute(
@@ -3513,11 +3555,11 @@ Do NOT ask for details again. Do NOT respond with text. CALL THE TOOL IMMEDIATEL
             // Picker unavailable → heuristic: prefer any provider with live access,
             // skipping the just-failed provider.
             const order: Array<[RouteTry['provider'], string]> = [
-              ['openrouter', 'meta-llama/llama-3.3-70b-instruct:free'],
+              ['openrouter', 'z-ai/glm-5.2:free'],
               ['nvidia', 'nvidia/llama-3.3-70b-instruct'],
               ['pollinations', 'minimax-m3'],
               ['hf', 'meta-llama/Meta-Llama-3.3-70B-Instruct'],
-              ['groq', 'llama-3.3-70b-versatile'],
+              ['groq', 'openai/gpt-oss-20b'],
             ];
             for (const [prov, model] of order) {
               if (prov === agentProvider) continue;
@@ -5428,12 +5470,15 @@ How to respond:
     };
     const groq = groqKey ? new Groq({ apiKey: groqKey, timeout: TIMEOUT_MS, maxRetries: 0 }) : null;
 
-    // Groq queue: small cheap models first (8b → 3.1-8b) to keep API load light,
-    // 70b last as the quality anchor. Each model gets a 1-shot retry after 1.5s —
-    // transient 429s usually clear within a second and this costs nothing on load.
+    // Groq queue: small cheap models first to keep API load light, the big
+    // anchor last. Each model gets a 1-shot retry after 1.5s — transient 429s
+    // usually clear within a second and this costs nothing on load.
+    // (Live-verified 2026-09-06: Groq delisted llama-3.1-8b-instant and
+    // llama-3.3-70b-versatile; gpt-oss models answer, but they're reasoning
+    // models — they need max_tokens headroom before content appears.)
     const groqQueue: Array<{ model: string; label: string }> = [
-      { model: 'llama-3.1-8b-instant', label: 'Groq/llama-3.1-8b-instant' },
-      { model: 'llama-3.3-70b-versatile', label: 'Groq/llama-3.3-70b-versatile' },
+      { model: 'openai/gpt-oss-20b', label: 'Groq/openai/gpt-oss-20b' },
+      { model: 'openai/gpt-oss-120b', label: 'Groq/openai/gpt-oss-120b' },
     ];
     const tryGroq = async () => {
       if (!groq) throw new Error('no groq key');
@@ -5446,7 +5491,7 @@ How to respond:
               model,
               messages: msgs as any,
               temperature: 0.75,
-              max_tokens: 450,
+              max_tokens: 900, // gpt-oss: ~600 reasoning tokens before content
             });
             const t = r?.choices?.[0]?.message?.content;
             if (!t) throw new Error('empty reply');
@@ -5471,7 +5516,7 @@ How to respond:
             method: 'POST',
             headers: { 'Authorization': `Bearer ${openrouterKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              model: 'meta-llama/llama-3.1-8b-instruct:free',
+              model: 'z-ai/glm-5.2:free', // meta-llama/llama-3.1-8b-instruct:free delisted (2026-09-06)
               messages: msgs,
               temperature: 0.75,
               max_tokens: 450,
@@ -6077,11 +6122,34 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
 // Frontend is synthetic-nature, served by Vite at http://localhost:5173
 
 import { mountFeatureRoutes } from 'src/features/featureRoutes.js';
+import { createAgentRouter } from 'src/agents/agentRoutes.js';
+import { e2eSeams } from 'src/e2e-seams.js';
+import { startAgentScheduler } from 'src/agents/scheduler.js';
+import { startNeuralTrainer } from 'src/agents/trainer.js';
 
 // Feature routes (agents/tools/cookbook/compare/docs/email/calendar).
 // Kept in a separate module to keep index.ts readable; all reuse the project’s
 // existing vault pattern (x-*-key headers passed in).
 mountFeatureRoutes(app);
+
+// Custom Agent Builder routes (draft/save/run/history/memory/gather). Vault
+// access + rate limiting are the monolith's own (unexported) helpers, so they
+// are injected at mount time — the router never imports index.ts back.
+// ENZO_E2E_SEAMS: dev-only hook so a hermetic e2e run (tests/e2e-fullstack.ts
+// + the browser test) can boot the REAL server with scripted LLM fixtures
+// (src/e2e-seams.ts) instead of live providers. Opt-in via env only; returns
+// a plain {} unless explicitly enabled — production boots are unaffected.
+app.use(createAgentRouter({ verifyVaultAccess, rateLimit, ...e2eSeams() }));
+
+// Scheduled agent runs — server-env keys only, write tools excluded (see
+// src/agents/scheduler.ts). Keyless CI boot is safe: ticks are try/catch'd.
+startAgentScheduler();
+
+// Background neural trainer — every agent keeps self-training on the platform
+// traffic /api/agents/match observes (see src/agents/trainer.ts + neural.ts).
+// Server-env keys only, unref'd interval, never-throw ticks; keyless boot just
+// means deep-tunes are skipped until a key exists.
+startNeuralTrainer();
 
 // ── Static frontend — single-origin hosting (production only) ─────────────────
 // When synthetic-nature has been built (npm run build → dist/), serve it from

@@ -1,4 +1,4 @@
-import { InteractiveNebulaShader } from '@/components/ui/liquid-shader'
+import { InteractiveNebulaShader } from '../../components/ui/liquid-shader'
 import { HomepageAnimeSky } from './HomepageAnimeSky'
 import type { HomepageTheme, HomepageAnimeScene } from './types'
 

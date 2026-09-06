@@ -24,7 +24,11 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const SKILLS_DIR = path.resolve(__dirname, 'skills');
+// ENZO_SKILLS_DIR lets tests (and exotic installs) relocate the user skill
+// store; default is the per-install `skills/` next to this file.
+export const SKILLS_DIR = process.env.ENZO_SKILLS_DIR
+  ? path.resolve(process.env.ENZO_SKILLS_DIR)
+  : path.resolve(__dirname, 'skills');
 const SKILLS_INDEX = path.join(SKILLS_DIR, 'index.json');
 const TMP_CLONE_DIR = path.resolve(__dirname, '.skill-tmp');
 
@@ -316,7 +320,7 @@ export async function learnSkillFromRepo(repoUrl: string, opts?: {
       instructions: distilled.instructions,
       sourceSnapshot: sample.snapshot.slice(0, 6000),
       learnedAt: Date.now(),
-      model: 'groq/llama-3.1-8b-instant',
+      model: 'groq/openai/gpt-oss-20b',
       files: sample.files.slice(0, 40),
     };
 
@@ -624,13 +628,13 @@ Return ONLY JSON:
 
   try {
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
+      model: 'openai/gpt-oss-20b', // live-verified json mode (2026-09-06) — llama-3.1-8b-instant delisted
       messages: [
         { role: 'system', content: sysPrompt },
         { role: 'user', content: `Distill a skill from ${repoUrl}. Return JSON only.` },
       ],
       temperature: 0.3,
-      max_tokens: 700,
+      max_tokens: 1600, // reasoning model: ~600 reasoning tokens before the JSON
       response_format: { type: 'json_object' },
     });
     const raw = completion.choices[0]?.message?.content ?? '{}';

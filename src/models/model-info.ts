@@ -132,7 +132,7 @@ async function synthesize(
     try {
       const groq = new Groq({ apiKey: keys.groq });
       const c = await groq.chat.completions.create({
-        model: 'llama-3.3-70b-versatile', temperature: 0.2, max_tokens: 900,
+        model: 'openai/gpt-oss-20b', temperature: 0.2, max_tokens: 900, // live-verified json mode (2026-09-06) — llama-3.3-70b delisted
         response_format: { type: 'json_object' }, messages,
       });
       return parseInfo(c.choices[0]?.message?.content ?? '{}', sources);
@@ -146,7 +146,7 @@ async function synthesize(
       method: 'POST',
       headers: { Authorization: `Bearer ${keys.openrouter}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'meta-llama/llama-3.3-70b-instruct', temperature: 0.2, max_tokens: 900,
+        model: 'z-ai/glm-5.2:free', temperature: 0.2, max_tokens: 900, // meta-llama delisted (2026-09-06)
         response_format: { type: 'json_object' }, messages,
       }),
     });

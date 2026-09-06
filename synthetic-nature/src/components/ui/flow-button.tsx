@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '../../lib/utils'
 
 /**
  * FlowButton — pill outline that fills from a growing centre circle on hover,

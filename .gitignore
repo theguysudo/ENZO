@@ -36,6 +36,10 @@ logs/
 model-cache.json
 memory-store.json
 
+# Vault bootstrap state (self-hosted master key + sealed claimed keys — written
+# at runtime by vault-boot.ts into ENZO_DATA_DIR, which defaults to <repo>/data)
+data/
+
 # Background health-ping store (live status + latency per model, regenerated every 5 min)
 model-health.json
 
@@ -50,6 +54,17 @@ llm7-verified.json
 # have index entries shielding them), which breaks `git add` and tsc.
 /skills/
 src/skills/.skill-tmp/
+# The skill store itself resolves to src/skills/skills/ (SKILLS_DIR =
+# __dirname/skills in skills.ts) — runtime per-install state, never committed.
+src/skills/skills/
+
+# Local agent-tooling workspaces (not part of the product)
+.agents/
+
+# Saved custom agents + run records (per-install state, not source) — same
+# anchoring rule as /skills/ above: unanchored `agents/` would also ignore
+# src/agents/*.ts in fresh clones and break git add + tsc.
+src/agents/agents/
 
 # Generated multi-file projects (written to disk by coding mode) — local
 generated-projects/

@@ -1,5 +1,176 @@
 # ENZO Project Changelog
 
+## [2026-09-06] — Overnight full-stack audit: 20 verified fixes across agents, onboarding and the terminal
+
+A code audit of every agent-flow, onboarding and terminal surface — each finding verified by fresh read before fixing, and every fix verified by `tsc --noEmit` (both trees) + the full 10-file test suite (run twice) + a fresh `vite build` whose bundle was live-verified on the restarted :5001.
+
+### Agents backend
+
+- **Bundled skills were silently dropped** from agent runs twice: `agentSkillIds` (the validator for client-submitted skill lists) only consulted the learned-skills store, and `skillGuidesFor` in the scheduler only injected instructions for learned skills — so the 74 `skills-bundled/` modules could be picked but never resolved to instructions. Both now fall back to `loadBundledSkills()` (id = module dir name).
+- **Agent runs were single-turn**: the run route passed only the current message to `runAgentLoop`, so a `confirmWrites`-style multi-turn flow (model asks, user answers, model acts) lost all context — the model re-asked or fell back to template. The route now splices the last 10 conversation turns into the loop's `history`.
+- **Memory write-back TOCTOU**: after a long-running agent loop the code saved the agent object captured *before* the run — a delete or concurrent edit during the run resurrected the deleted agent or clobbered the edit. Now re-reads the entity after the loop, merges only genuinely new lessons, and re-reads again before the save (`never saveAgent a deleted entity`).
+- **`scheduleAgentRefine` captured client keys into a timer**: the background re-draft could keep firing a user's key after they logged out / rotated it. It now uses `SERVER_KEYS()` (server-env keys only) — same rule the neural trainer already follows.
+- **Trainer keeps the brain scoreboard warm when idle**: on a tick with nothing to train, the trainer pokes `probeBrains` (self-throttled ≤1 round / 15 min) so the health ranking doesn't go stale on a quiet platform.
+- **Reasoning-token headroom in the run loop**: the agent loop's per-turn cap was a flat 1500 — reasoning models (gpt-oss / deepseek-r / qwen3, i.e. the current free tier) spend much of that budget on thinking before content and got truncated replies. The cap is now 6000 for reasoning models, 1500 otherwise (explicit `maxTokens` still wins).
+
+### Terminal (`TerminalSection.tsx`) — seven verified defects
+
+- **Research-steps ledger lost on error**: the `search` frames accumulated only in React state inside `try`, so the catch/finalize paths wrote `researchSteps: undefined` into the saved message and the "Sources & steps" block vanished after an abort or server error mid-research. A stream-local `runSteps` array (the same pattern as `fullText`/`reasoningText`) now feeds all three finalize sites.
+- **Stream leak on unmount**: navigating away mid-stream left the fetch reader running into a dead component. An unmount effect now aborts via `abortRef`.
+- **Stop on an empty stream produced a junk bubble**: an `AbortError` with zero streamed text now quietly resets state and returns — no empty assistant message is committed.
+- **"Clear chat" destroyed the model/mode selection**: `clearHistory` minted a bare session, dropping `model`, `chatMode` and image-session state, so the next send fell to defaults. It now clones the active session's settings into the fresh one.
+- **Auto-continue & compare-models chips sent stale input**: both used a `handleSend` closure captured at render time, so they re-sent the turn's original input instead of the (possibly edited) current one. Both go through a `handleSendRef` kept current on every render (`useRef`, re-assigned after definition).
+- **Fullscreen (maximize portal) killed file input / auto-scroll / the composer**: the shared-chrome terminal renders in both the docked and maximized trees, so object refs were clobbered and `null`ed on portal unmount. All three refs now use live-node Set trackers (`attachX` callbacks that add connected nodes and prune disconnected ones), surviving any number of portal mounts/unmounts.
+- Verified already-correct (no change needed): the agent-run SSE path builds multi-provider key headers + a `providerKeys` body, and surfaces non-2xx as an error bubble.
+
+### Agents UI (`AgentsSection.tsx`)
+
+- **Transcript died on tab switch**: `AnimatePresence mode="wait"` unmounts tab panels, so the run chat's local `turns` state was destroyed when the user peeked at another tab and returned mid-conversation. The transcript now lives in `AgentDetail` (parent) and is passed down — switching tabs preserves it.
+- **Detail view went stale after a run**: the agent card / memory count didn't reflect what a run just learned. The run chat's completion now refreshes the agent + runs in parallel and re-syncs the parent.
+- **Run history only loaded once**: opening the History tab now reloads runs on every tab entry (`useEffect` on `tab`), not just on first mount.
+- **Silent failures surfaced**: agent save (step 2 of create) rendered its error into a step-1-only state (invisible), and the memory/knowledge/gather operations swallowed non-2xx responses. Save now has its own `saveError` banner on step 2; every guarded operation runs through a `guarded()` wrapper that shows an `opError` banner under the tab bar.
+- **Multi-turn agent chat**: the run chat now sends the last 10 turns as `messages` (matching the backend fix above) so follow-up answers build on the conversation.
+
+### Onboarding (`OnboardingView.tsx`)
+
+- **Docker-variant Google lockout (re-applied — a `git checkout` had wiped the earlier fix)**: with `GOOGLE_AUTH=false` (the Docker variant), step 3 still required a saved Google token, dead-ending docker onboarding. The gate now follows the variant: Google is **Optional** in the docker variant (any pasted token is still saved), **Required** on hosted. The button label reflects which.
+- **Nested interactive HTML**: the OpenRouter step-1 button rendered an `<a>` wrapping a `<button>` (invalid + double-navigation risk). It's now a single `<a>` that renders a "✓ Connected" chip when linked, the connect GIF otherwise, and is pointer-inert when already connected.
+
+### Ops
+
+- **`deploy/verify-live-keys.sh`** (new, executable): EC2 live-key verification runbook — checks app health, then probes each provider's own API (OpenRouter key-info, Groq/NVIDIA/Exa model lists, Google via the `x-goog-api-key` header variant), then the platform's `/api/models/health`. Never prints key values; parses `.env` without echoing it; exits non-zero on the first REJECTED key.
+- Frontend rebuilt (dist is tracked): fresh bundle `index-Btg91z2F.js` (1502 kB / 437 kB gzip) + `.gz` siblings; the real :5001 instance restarted with `NODE_ENV=production` (single-origin UI gate), verified serving the new bundle, all three background sweeps (`[agents-scheduler]`, `[agents-trainer]`, `[bundled-skills]`) up, `/api/health` 200, 1888-model catalog cached. The instance remains unclaimed for the user.
+
+## [2026-09-06] — Winner-pinned two-pass drafting + the great model delisting fix
+
+Live testing showed the race drafter still collapsing to the template — and the logs named the real culprits: the two-pass draft fired **two full races** (~16 requests in ~2s), so pass 1's winner exhausted the free-tier rate budget and pass 2 all-429'd; the race waited for the slowest straggler even after a 1s winner; and **every hardcoded fallback model had been delisted** (live-verified: Groq dropped llama-3.1-8b-instant AND llama-3.3-70b-versatile, OpenRouter dropped meta-llama/llama-3.1-8b-instruct:free; anonymous Pollinations now 401s unconditionally). This entry pins the winners and swaps in the live catalog.
+
+### Winner pinning (the rate-budget fix)
+
+- **`makeDraftChat`**: pass 1 races the pool **once**; the winner is then **pinned** — pass 2 (the 400–1000-word veteran manual) calls that proven-reachable model directly, one request with a manual-scale budget (45s / 3200 tokens) instead of firing a second full race. Only if the pinned model fails mid-draft does a fresh race fire, then the legacy chain. Wired into `/draft`, `/auto`, and the background re-tune.
+- **True first-wins race**: the first candidate with usable text now **aborts the stragglers** (shared `AbortController`, `AbortSignal.any` for per-candidate timeouts) — a settled race no longer waits 12s for the slowest loser or keep hammering rate-limited endpoints. Failure reasons are logged compactly; aborted stragglers no longer dent the health scoreboard (only genuine pre-win failures score −1).
+- **Reasoning-model budgets**: the live free tier is now reasoning models (gpt-oss, qwen) — they spend ~600 tokens on reasoning before content, so every json-mode call site gets ≥900 max_tokens and the passes get 1600/3200. gpt-oss-20b is live-verified working with `json_object`; qwen3.6-27b's json mode is broken server-side (`json_validate_failed`) — its legs run in plain mode with regex JSON extraction (it prepends a thinking preamble).
+- **Legacy chain refreshed to live models**: Groq `openai/gpt-oss-20b` → OpenRouter `z-ai/glm-5.2:free`. Anonymous Pollinations is **gone** from the candidate pool (401 without a key) — a real pollinations key still admits candidates.
+- **`probeBrains` self-throttles** (≤1 round / 15 min, top-3 pool ping): route-triggered probes can no longer deepen a rate-limit hole. The /handoff classify (a tiny yes/no on every agent-ish chat message) now races only the **3 healthiest** candidates at a small budget (10s / 600 tokens) instead of the full pool.
+- **Refine guard fixed**: `scheduleAgentRefine` now only upgrades a manual still **byte-identical** to the mechanical template — a previous logic bug could overwrite a user-edited manual. The /draft template card is honest about the flow ("retry Draft…, or save it and edit the manual directly; a saved agent also re-drafts itself in the background"), and `sanitizeAgentDraft` always persists `draftModel` (even `''`) so the "Drafted by" card can distinguish template-drafted from unknown.
+
+### The delisting sweep (every hardcoded dead model replaced with a live-verified one)
+
+All agent-flow and chat decider call sites that named a delisted model now name a live one — memory distill (agents.ts), gather notes (gather.ts), skill distillation + provenance (skills.ts), compare_models/document_assist + the tool-calling agent loop (agent-tools.ts: `LOOP_MODEL` = gpt-oss-20b), deep-research judgment (research-engine.ts), model-info synthesis (model-info.ts), and in index.ts: the chat fallback picker, route chains, UI aliases (claude / llama-70b / groq-instant), research-mode default (gpt-oss-120b), the agent-loop fallbacks, the meme roaster, and the deep-research query generator. Tests updated: keyless /auto now lands on the honest template with `draftModel: ''` (anonymous pollinations no longer drafts anything); the whole 10-file suite and `tsc --noEmit` stay green.
+
+## [2026-09-06] — Race drafter + background self-improvement + the neural layer
+
+Live testing exposed the drafter's real failure mode: a 429 or a delisted cached model *fails fast*, so even the rolled shortlist collapsed to the mechanical template in seconds. Two user-driven upgrades close it out.
+
+### The race (try ~10 at once, first answer wins)
+
+- **`raceDraftChat`**: every free-model candidate from the pool fires **simultaneously** — Groq, OpenRouter, NVIDIA, Hugging Face and anonymous Pollinations, top-2 mid-tier free per provider — each with a 12s cap. Whichever model answers first writes the draft; a rate-limited or dead endpoint no longer burns seconds failing one-by-one. The hardcoded chain (Groq 70B → OpenRouter free) stays as the last resort.
+- **Brain health scoreboard**: every race outcome potentiates (+1) or depresses (−1) a model's score — the same additive-Hebbian family the per-agent weights use. Future races order by health (proven models first, sick models demoted), so the drafter *keeps finding the best free model* on its own. After each draft, `probeBrains` pings the pool head with a one-token message to keep the scoreboard warm and logs the current top.
+- **Background re-tune (`scheduleAgentRefine`)**: when a draft lands on the template (all candidates were down), the server retries the full two-pass draft at +90s / +5min / +15min — the SAME agent's manual upgrades in place the moment a model frees up. It only ever overwrites a manual the user hasn't edited, and the /auto response carries `pendingRefine` so the terminal can say "the full expert manual is being drafted in the background."
+
+### The neural layer (agents keep learning from platform activity)
+
+Gradient descent on hosted weights is impossible from a BYOK box — the honest functional equivalent is the classical online-learning rule behind Hopfield/Oja memories, implemented per agent in `src/agents/neural.ts`:
+
+- **Weights**: per-agent term→strength vector, updated `w(t+1) = clamp(w·λ + α·x)` (λ=0.995 decay, saturation at 60, prune below 0.4). **Identity conditioning**: features rooted in the agent's own domain/manual potentiate 3× stronger than incidental ones.
+- **Traffic ingestion**: the pre-send `/api/agents/match` (already fired on every chat message) now enqueues domain-matched messages as training signals — **the agent learns from what the user does even when the agent itself is never run**.
+- **Trainer (`src/agents/trainer.ts`)**: a 90s unref'd sweep folds drained traffic into the weights (local, zero LLM), and every 3rd cycle with traffic runs a **deep tune** — a free drafting model reviews the traffic + weights and proposes expert lessons (merged into the agent's editable memory) and focus boosts (potentiated weights). Server-env keys only, never-throw ticks, keyless CI boots are safe.
+- **Learning changes behavior**: `buildAgentSystemPrompt` injects the top-8 strongest terms as a **NEURAL FOCUS** block into every future run.
+- **Surface**: `GET /api/agents/:id/neural` (cycles, deep tunes, top weights, pending traffic, focus line), `POST /api/agents/:id/neural/train` (one cycle now — "Train now" button in the new **Neural** tab of the agent detail view, with weight bars and the live focus line).
+- **Security**: the neural state is server-computed ONLY — `sanitizeAgentDraft` ignores any client-supplied `neural` field (a hostile "trained brain" payload would otherwise inject itself into future run prompts), and the background trainer uses server-env keys exclusively.
+
+### Tests
+
+Neural unit coverage (features/stopwords, sanitize caps+prunes, the learning rule incl. identity conditioning and decay, focus block top-K, traffic queue cap/order, deep-tune parse + failure paths, trainer cadence + lesson persistence) and HTTP coverage (client neural payload ignored on save, /match → train → NEURAL FOCUS lands in the run prompt, deep tune on the 3rd cycle, honest no-op without traffic, 404s). The whole existing suite stays green.
+
+## [2026-09-06] — Drafter discovery: a free mid-tier model from your own providers writes each agent
+
+The drafting brain was hardcoded (Groq's 70B, OpenRouter fallback) — every agent was written by whichever model the code happened to name. Now the builder discovers the drafter itself: from the user's own keyed providers, it picks a capable **mid-tier FREE model** out of the live catalog (the cache already tracks free-tier availability per model) and lets *that* model make the expert-manual decisions — the domain analysis and the veteran manual both.
+
+- **Discovery (`pickDraftBrains` — a ranked shortlist)**: provider order groq → openrouter → nvidia → Hugging Face → Pollinations. Filters to free, text/multimodal, non-junk classes; ranks for *mid-tier* quality — solid 7B–80B instruct models with ≥32k context win, sub-5B toy models and experimental previews are penalized. **A 429 or outage on the top pick rolls to the next candidate** (a rate-limited Groq tier no longer collapses the draft to the template — the exact failure observed in live testing). **Zero keys? Pollinations' anonymous tier drafts it** — the builder works for a user with no provider key at all. The hardcoded chain (Groq 70B → OpenRouter free) remains the last resort so drafting never dead-ends.
+- **`brainChat`**: one OpenAI-compatible non-streaming call path against any provider (the proven endpoint map — openrouter/groq/nvidia/hf/pollinations), reusing the browser-sent per-request keys with server-env fill-in.
+- **Provenance everywhere, honest**: a `via` box records the model that *actually served* the draft (not the model that was merely picked); the draft response carries `draftModel` + `draftModelReason` — and when every model was unreachable and the local template wrote it, `draftModel` is empty and the reason says "No drafting model was reachable… retry" instead of claiming a brain. The Agents review step shows a **"Drafted by"** card; agents created via the terminal handoff store `draftModel` and the chat's "✓ created" note names the model.
+- Tests: a mini-catalog seeded via `ENZO_MODEL_CACHE` proves selection (mid-tier free Qwen chosen over a 1B toy, a paid giant, and an embedder with only an OpenRouter key; anonymous pollinations with no keys) and the honesty path (throwing seam → template served, `draftModel` empty, reason states it plainly).
+
+## [2026-09-06] — Agent Builder upgrade: fine-tuned feel, dynamic tools, chat↔agent routing
+
+The first builder proved the workflow but drafted like a prompt-injection demo: one LLM pass, a fixed tool menu, and agents that lived only in their own tab. This upgrade closes the gap to what "custom agent" should mean.
+
+### Two-pass drafting (the fine-tuning substitute)
+
+A single prompt asked to both understand the domain and write the manual produces generic output. Drafting is now two deliberate passes:
+
+- **Pass 1 — domain analysis**: a cheap, fast JSON call extracts the professional field hiding inside the task — domain, subfield, the deliverable as the field shapes it, the audience, a one-sentence 30-year-veteran profile, and 4–8 insider vocabulary words.
+- **Pass 2 — the veteran's operating manual**: written *from* that analysis, not from the raw task text. Mandated sections: IDENTITY (first person), TACIT KNOWLEDGE (5–8 things a 30-year specialist knows that never appear in documentation — the section that separates a fine-tuned feel from a generic one), OPERATING PROCEDURE, DECISION HEURISTICS, OUTPUT FORMAT, EDGE CASES. 400–1000 words, zero placeholders, "an expert reader should not be able to tell it wasn't written by a colleague."
+
+### Dynamic tools
+
+The tool list is no longer a fixed menu: the drafting model picks what the task genuinely needs, the task text itself argues for tools via a second-opinion pass (regex), and the union is deduplicated — a MUN researcher gets `web_search` + `deep_research`, an invoice watcher gets Gmail tools. Run loop widened to 16 iterations (specialists legitimately chain more tool hops).
+
+### Chat ↔ agent routing
+
+- Every agent now carries a `domain` (from pass 1), used for routing. New `POST /api/agents/match` scores a message against saved agents locally — no LLM, sub-millisecond, fires before send — and when a domain match clears the threshold the terminal asks: *run through this agent, or chat normally?* ("normally" also dismisses that agent for the session).
+- New `POST /api/agents/handoff` + `POST /api/agents/auto`: say "create an agent that researches MUN country positions" **in the terminal** and it's confirmed in the background (regex prefilter + one LLM classification call — never blocking the chat) and auto-built with the full two-pass pipeline. A progress note appears in the conversation; the finished agent waits in the Agents tab.
+- Agent runs from chat stream inline: thought steps, full answer, and the "Learned this run" block render straight into the transcript.
+- Match lives on its own rate-limit bucket (`agent-match`, 60/min) so pre-send checks never eat the vault budget that saves and deletes draw from.
+
+### Implementation
+
+- `src/agents/agentRoutes.ts` — `composeDraft` rewritten two-pass; `/api/agents/match`, `/api/agents/handoff`, `/api/agents/auto`; dynamic tool merge; 16-iteration run loop.
+- `src/agents/agents.ts` — `domain` field on `AgentEntry` (+ sanitize); `scoreAgentMatch` / `matchAgentForMessage` (stopword-filtered phrase scoring, threshold ≥ 5).
+- `synthetic-nature/src/components/TerminalSection.tsx` — pre-send match dialog, background handoff/auto-create, in-chat agent SSE rendering with per-agent session dismissal.
+- `synthetic-nature/src/components/AgentsSection.tsx` — domain surfaced in the review step.
+- `tests/agents.test.ts` — the draft seam is now two-pass-aware (asserts pass 1 asks for `domainTerms` and pass 2 is built from pass 1's analysis, keyed by task), plus coverage for match hit/miss/threshold, handoff prefilter vs LLM confirm vs LLM-failure-quiet-null, and auto-create persistence + routability.
+
+## [2026-09-05] — First-key claim bootstrap: a fresh install can unlock everything from the web UI
+
+**The problem this fixes.** A brand-new self-hosted instance (docker compose up) could mint vault session tokens only if the operator had already put both `ENZO_MASTER_KEY` and a provider key into a server-side `.env` by hand. Since the entire pitch of the web UI is "paste your keys in the browser", an install that followed the compose instructions hit a hard wall: every vault-gated feature (Agents, skills, memory, .env sync) returned 401/503 forever, through no fault of the user. The web UI's save message even claimed "server runs BYOK" on saves that had silently failed to sync.
+
+### The bootstrap
+
+- **Master key generation on boot** (`src/core/vault-boot.ts`): a self-hosted instance (docker sets `ENZO_SELF_HOSTED=1`) that boots without `ENZO_MASTER_KEY` gets one generated (`crypto.randomBytes(32)`, hex) and persisted to `ENZO_DATA_DIR/vault-boot.json`, mode 0o600. Hosted/keyless boots are untouched — nothing generates, nothing restores, the 503 stays honest.
+- **First live-validated key claims the instance.** When the server holds zero provider keys, the first key offered at `POST /api/vault/session` for a claimable provider (groq, openrouter, nvidia, huggingface, exa, google — only ones with a real live validation probe; pollinations/llm7 can't be validated so they can't claim) is validated against the provider, then written to `.env` and sealed (AES-256-GCM via crypto-store) into `ENZO_DATA_DIR/vault-keys.json`, and the session token mints immediately. From then on the instance is claimed: strict-match resumes for every later key, same as before.
+- **Keys survive container upgrades**: claimed keys are re-injected into `process.env` at every boot (real environment always wins over the sealed store) — the docker `enzo-memory` volume carries them across image pulls.
+- **Instance token formula.** The session-token HMAC previously required a `GROQ_API_KEY` in the message, so an instance claimed with e.g. an OpenRouter key still couldn't mint. The formula now binds to the master key alone (`enzo-vault:instance:<window>`) when no Groq key exists; the groq-bound formula is unchanged when one does, so existing sessions keep working.
+- **Honesty fixes in the browser flow**: the vault save message now says exactly what happened ("not synced to server .env (key must match a value already in the server's .env)"), the stale mint-blocked latch clears when the key set changes, and the Agents tab surfaces a 401 as a retryable banner instead of a silent empty list.
+- **Docker onboarding gate**: Google AI Studio is Optional in the docker variant (`VITE_GOOGLE_AUTH=0`), both the onboarding step badge and the app entry gate — previously the gate demanded a Google token the variant has no login for.
+
+**Security note (Portainer first-admin pattern):** on an internet-exposed FRESH instance, anyone who can reach the URL and holds a real provider key could arrive first and claim. The window closes the moment any provider key is held. Pre-seeding a key in the compose env (documented in docker-compose.yml) skips the race entirely.
+
+### Implementation
+
+- `src/core/vault-boot.ts` — new module: boot-time master-key bootstrap, sealed operator-key store, claim-gate helpers (`isSelfHostedInstance`, `serverHoldsNoProviderKeys`, `persistClaimedKey`, `CLAIMABLE_PROVIDERS`, `deriveVaultToken`). Never throws: a failed bootstrap leaves the instance claimable rather than crashing the boot.
+- `index.ts` — `initVaultBoot()` wired in before the first `ENZO_MASTER_KEY` read; instance-formula token; first-key claim branch in the mint endpoint (live `validateProviderKey` probe, 403 with detail on rejection).
+- `tests/vault-boot.test.ts` — hermetic suite appended to the `npm test` chain: sealed round-trip, no plaintext on disk, env-wins-over-store, token formulas, claimable-provider exclusions, plus two subprocess tests (fresh self-hosted boot generates a 0o600 master key; hosted boot generates nothing).
+- Docker: runtime stage now sets `ENZO_SELF_HOSTED=1` and `ENZO_DATA_DIR=/app/data`; compose comments updated to match reality; `data/` gitignored.
+
+## [2026-09-05] — Custom Agent Builder: describe a task in plain English, it gets built
+
+A new **Agents** tab in the workspace. You type what you want ("every morning check my Gmail for invoices and draft replies for the urgent ones"), and the backend composes the agent: an expert-manual system prompt (300–800 words: role, domain knowledge, operating SOP, decision heuristics, output format, edge cases — the practical substitute for weight tuning), the tool subset it actually needs, and the strongest model your keys support for that task. Everything is reviewable as check-cards before anything is saved; an inline test-run mini-chat lets you try it first.
+
+### The "fine-tuned feel" — four mechanisms, no weights touched
+
+- **Expert-manual prompts** — structured few-shot depth instead of fine-tuning.
+- **Strong-model pinning** — the draft ranks the live model catalog for the task and pins the best model the user's keys support, with the usual fallback chain at run time.
+- **Reflection before answering** — agent runs get 12 loop iterations (chat stays 6) with a self-check before the final answer.
+- **Accumulating memory** — every run distills "what did I learn about this user/task" into a visible, editable Learned panel (≤30 entries) that is injected into every future run. Run it twice and watch it get better.
+
+### Internet gathering (opt-in)
+
+With the "search the internet for skills" toggle on, the builder sources domain knowledge, ranked by trust: bundled vendored skills → your already-learned skills → GitHub repos found via web search, cloned with the existing `learnSkillFromRepo` machinery (text-file sampling only — nothing from a clone is ever executed) → your own reference URLs, fetched SSRF-guarded (https only, private IPs rejected, 200KB cap) and distilled into knowledge notes. Everything arrives as check-cards with sources; nothing enters an agent silently. Saved agents can re-gather later ("Refresh knowledge") and you review the diff before applying.
+
+### Schedules fire server-side
+
+Agents can run daily at a set time (with timezone) or on an interval. Scheduled runs use read-only tools only (no gmail_send/calendar_create — a scheduled agent that could send mail would be a mail bomb with a cron trigger), server-env keys, and record into run history with memory distillation.
+
+### Implementation
+
+- `src/agents/` — agents.ts (store + validation, skills.ts house pattern), gather.ts (sourcing engine, injectable seams), scheduler.ts (60s sweep, per-agent locks, stale-lock timeout, never throws), agentRoutes.ts (Express router, dependency-injected like mountFeatureRoutes).
+- `agent-tools.ts` — `tools` + `maxIters` on AgentLoopArgs; tool calls outside the agent's subset return `{ error: 'tool not permitted for this agent' }`.
+- `tests/agents.test.ts` — full hermetic suite (store CRUD, hostile payloads, tool-subset loop via `_createStream` fakes, SSRF guard, scheduler math including tz-corrected daily slots, HTTP end-to-end over a real server). Appended to the `npm test` chain.
+- **Keyless-boot fix found by CI** — a second `.env` loader in index.ts used truthiness (`!process.env[k]`) instead of an `undefined` check, so the CI check's explicitly-empty `GROQ_API_KEY=` was backfilled from the local `.env` and the keyless BYOK boot line never printed. Now the real environment wins over the file at every site, same precedence as `node --env-file`.
+- Docker: `enzo-agents` named volume added to docker-compose.yml (agent store survives upgrades); Dockerfile seeds `src/agents/agents/`.
+
 ## [2026-08-30] — Phase D defect sweep: 17-item remediation list, executed end to end
 
 Follow-up to the 2026-08-29 security pass: every open item from the post-hardening defect review, plus a documentation pass that made the docs describe the repo that actually exists.

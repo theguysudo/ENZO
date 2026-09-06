@@ -16,6 +16,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { staggerIn } from '../lib/gsapTransitions'
 import * as keyVault from '../lib/keyVault'
+import { GOOGLE_AUTH } from '../lib/variant'
 import { DotGridBackground } from './ui/modern-login-signup'
 
 // ─── PKCE helpers ─────────────────────────────────────────────────────────────
@@ -157,6 +158,14 @@ function OnboardingView({
       if (nvidiaStatus !== 'saved') { setError('Save your NVIDIA key to continue.'); return }
       setError(null); setStep(3)
     } else if (step === 3) {
+      // Docker variant (GOOGLE_AUTH=false): App.tsx's login gate is
+      // `hasGoogle || !GOOGLE_AUTH`, so a Google key is genuinely optional
+      // here — requiring one would lock a keyless-Google user out forever.
+      if (!GOOGLE_AUTH) {
+        if (googleStatus !== 'saved' && googleToken.trim()) saveGoogleToken()
+        setError(null); setStep(4)
+        return
+      }
       if (googleStatus !== 'saved' && googleToken.trim()) saveGoogleToken()
       if (googleStatus !== 'saved' && !googleToken.trim()) { setError('Save your Google AI Studio key to continue.'); return }
       setError(null); setStep(4)
@@ -249,34 +258,33 @@ function OnboardingView({
                 <OnbStatusDot status={orStatus} />
               </div>
 
-              {/* OpenRouter Button */}
+              {/* OpenRouter Button — one interactive element, not an <a> wrapping
+                  a <button>: nested interactive content double-navigates (the
+                  inner click starts OAuth while the outer anchor also opens
+                  openrouter.ai) and is invalid HTML. Connected = plain disabled
+                  chip; otherwise the whole anchor IS the button. */}
               <a
                 href="https://openrouter.ai/keys"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block w-full max-w-md mx-auto"
+                onClick={orStatus === 'connected' ? undefined : startOpenRouterOAuth}
+                className={`block w-full max-w-md mx-auto ${orStatus === 'connected' ? 'pointer-events-none' : 'cursor-pointer'}`}
               >
-                <button
-                  onClick={orStatus === 'connected' ? undefined : startOpenRouterOAuth}
-                  disabled={orStatus === 'connected'}
-                  className={
-                    orStatus === 'connected'
-                      ? 'w-full py-4 px-6 rounded-2xl bg-white/5 border border-white/10 text-white font-mono-display text-xs uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed'
-                      : 'block w-full rounded-2xl transition-transform duration-150 ease-out hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed'
-                  }
-                >
-                  {orStatus === 'connected' ? (
-                    '✓ Connected'
-                  ) : (
-                    <img
-                      src="/buttons/OpenRouter_button.gif"
-                      alt="Get your OpenRouter token"
-                      width={399}
-                      height={131}
-                      className="mx-auto block max-h-16 w-auto max-w-full"
-                    />
-                  )}
-                </button>
+                {orStatus === 'connected' ? (
+                  <span
+                    className="block w-full py-4 px-6 rounded-2xl bg-white/5 border border-white/10 text-center text-white font-mono-display text-xs uppercase tracking-widest opacity-60"
+                  >
+                    ✓ Connected
+                  </span>
+                ) : (
+                  <img
+                    src="/buttons/OpenRouter_button.gif"
+                    alt="Get your OpenRouter token"
+                    width={399}
+                    height={131}
+                    className="mx-auto block max-h-16 w-auto max-w-full transition-transform duration-150 ease-out hover:-translate-y-0.5"
+                  />
+                )}
               </a>
 
               <div className="flex items-center gap-3">
@@ -408,7 +416,7 @@ function OnboardingView({
             </motion.div>
           )}
 
-          {/* ── Step 3: Google AI Studio (Gemini) — mandatory ── */}
+          {/* ── Step 3: Google AI Studio (Gemini) — required on hosted, optional in docker ── */}
           {step === 3 && (
             <motion.div key="s3" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.3 }}
               className="liquid-glass-panel rounded-3xl p-6 space-y-5"
@@ -419,8 +427,13 @@ function OnboardingView({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono-display text-xs uppercase tracking-widest text-white">Google AI Studio</span>
-                    <span className="rounded-full border border-orange-400/30 bg-orange-400/10 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-orange-300">Required</span>
+                        <span className="font-mono-display text-xs uppercase tracking-widest text-white">Google AI Studio</span>
+                    {!GOOGLE_AUTH && (
+                      <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-white/50">Optional</span>
+                    )}
+                    {GOOGLE_AUTH && (
+                      <span className="rounded-full border border-orange-400/30 bg-orange-400/10 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-orange-300">Required</span>
+                    )}
                   </div>
                   <div className="mt-0.5 text-[10px] text-white/40">Gemini Flash — free tier, no credit card</div>
                 </div>
@@ -480,7 +493,7 @@ function OnboardingView({
               <div className="flex gap-2 pt-1">
                 <button onClick={goBack} className="flex-1 rounded-2xl border border-white/10 py-3 font-mono-display text-xs uppercase tracking-widest text-white/40 transition-all hover:border-white/20 hover:text-white/70">← Back</button>
                 <button
-                  disabled={googleStatus !== 'saved'}
+                  disabled={GOOGLE_AUTH && googleStatus !== 'saved'}
                   onClick={goNext}
                   className="flex-[2] rounded-2xl border border-white/15 bg-white/5 py-3 font-mono-display text-xs uppercase tracking-widest text-white/80 transition-all hover:bg-white/10 hover:-translate-y-0.5 disabled:opacity-35"
                 >

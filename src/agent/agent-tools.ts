@@ -120,7 +120,10 @@ async function resolveChat(keys: FeatureKeys, sys: string, userMsgs: any[]): Pro
   const groq = keys.groq || process.env.GROQ_API_KEY;
   const nvidia = keys.nvidia || process.env.NVIDIA_API_KEY;
   const openrouter = keys.openrouter || process.env.OPENROUTER_API_KEY;
-  const models = ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile'];
+  // Live-verified 2026-09-06: llama-3.1-8b-instant / llama-3.3-70b-versatile
+  // are delisted from Groq. gpt-oss-20b is a reasoning model (needs token
+  // headroom); qwen3.6-27b answers in plain mode.
+  const models = ['openai/gpt-oss-20b', 'qwen/qwen3.6-27b'];
   const errors: string[] = [];
 
   if (groq) {
@@ -131,7 +134,7 @@ async function resolveChat(keys: FeatureKeys, sys: string, userMsgs: any[]): Pro
           model,
           messages: [{ role: 'system', content: sys }, ...userMsgs] as any,
           temperature: 0.6,
-          max_tokens: 700,
+          max_tokens: 900, // gpt-oss is a reasoning model: ~600 tokens before content
         });
         const t = r?.choices?.[0]?.message?.content;
         if (t) return t;
@@ -168,10 +171,10 @@ async function resolveChat(keys: FeatureKeys, sys: string, userMsgs: any[]): Pro
         method: 'POST',
         headers: { Authorization: `Bearer ${openrouter}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'meta-llama/llama-3.1-8b-instruct:free',
+          model: 'z-ai/glm-5.2:free', // meta-llama/llama-3.1-8b-instruct:free delisted (2026-09-06)
           messages: [{ role: 'system', content: sys }, ...userMsgs],
           temperature: 0.6,
-          max_tokens: 700,
+          max_tokens: 900,
         }),
       });
       if (r.ok) {
@@ -707,8 +710,9 @@ export async function executeTool(name: string, args: any, ctx: ToolCtx): Promis
 
 // ── The agent loop ───────────────────────────────────────────────────────────
 const MAX_ITERS = 6;
-// Prefer Groq 70b (reliable, fast, user key usually present). Falls back via caller's groqKey.
-const LOOP_MODEL = 'llama-3.3-70b-versatile';
+// Prefer Groq gpt-oss-20b (live-verified 2026-09-06 — llama-3.3-70b delisted;
+// tool-capable, reasoning model so turns need token headroom). Falls back via caller's groqKey.
+const LOOP_MODEL = 'openai/gpt-oss-20b';
 
 const TOOL_USE_HINT = `
 
@@ -887,6 +891,13 @@ export interface AgentLoopArgs {
   mode?: string;
   maxTokens?: number;
   maxContinuations?: number;
+  // Tool subset: when set (custom agents), only these tool specs are offered
+  // to the model and calls outside the set are rejected by the loop's
+  // permission guard. Unset → full TOOL_SPECS (existing chat behavior).
+  tools?: any[];
+  // Iteration cap for the tool-calling loop. Default MAX_ITERS (6, chat);
+  // custom agents pass 12 for deeper reflection.
+  maxIters?: number;
   // ponytail: test seam — inject a fake stream factory so the tool-call
   // accumulation loop can be exercised without a live key.
   _createStream?: (opts: any) => Promise<AsyncIterable<any>>;
@@ -1159,7 +1170,7 @@ function requiresToolCall(userContent: string): boolean {
 export async function runAgentLoop(a: AgentLoopArgs): Promise<boolean> {
   const pConfig: ProviderConfig = a.providerConfig || {
     provider: 'groq',
-    model: 'llama-3.3-70b-versatile',
+    model: 'openai/gpt-oss-20b', // llama-3.3-70b-versatile delisted (2026-09-06)
     apiKey: a.groqKey || process.env.GROQ_API_KEY || '',
   };
 
@@ -1171,12 +1182,23 @@ export async function runAgentLoop(a: AgentLoopArgs): Promise<boolean> {
 
   let wroteAnything = false;
   const userNeedsTool = requiresToolCall(a.userContent);
-  const turnMaxTokens = a.maxTokens ?? 1500;
+  // Reasoning models (gpt-oss etc.) burn invisible reasoning tokens BEFORE the
+  // first visible character — a flat 1500 cap makes long turns look "empty"
+  // or end mid-code-fence with no content at all. Give a reasoning model the
+  // headroom it needs; plain models keep the lean cap.
+  const isReasoningModel = /gpt-oss|deepseek-r|qwen3|thinking|reasoning/i.test(pConfig.model);
+  const turnMaxTokens = a.maxTokens ?? (isReasoningModel ? 6000 : 1500);
   const maxContinuations = a.maxContinuations ?? 6;
+  const iterCap = a.maxIters && a.maxIters > 0 ? Math.min(a.maxIters, 24) : MAX_ITERS;
+  const allowedToolSet = Array.isArray(a.tools) && a.tools.length
+    ? new Set(a.tools.map((t: any) => t?.function?.name).filter(Boolean))
+    : null;
 
   // Stream one assistant turn; accumulate text and native/text-based tool calls.
   async function streamTurn(withTools: boolean, isFinal: boolean = false, forceToolChoice: boolean = false): Promise<{ content: string; toolCalls: any[]; truncated: boolean }> {
-    const availableTools = TOOL_SPECS;
+    const availableTools = allowedToolSet
+      ? TOOL_SPECS.filter((t: any) => allowedToolSet.has(t.function.name))
+      : TOOL_SPECS;
     const opts = {
       model: pConfig.model,
       messages,
@@ -1285,7 +1307,7 @@ export async function runAgentLoop(a: AgentLoopArgs): Promise<boolean> {
   }
 
   try {
-    for (let i = 0; i < MAX_ITERS; i++) {
+    for (let i = 0; i < iterCap; i++) {
       // Force tool_choice:'required' on first turn if user clearly needs a tool
       const forceTools = (i === 0 && userNeedsTool);
       
@@ -1330,7 +1352,9 @@ export async function runAgentLoop(a: AgentLoopArgs): Promise<boolean> {
               for (const tc of retry.toolCalls) {
                 const label = TOOL_LABELS[tc.function.name] || tc.function.name;
                 a.ctx.onStep(`🔧 ${label}…`);
-                const result = await executeTool(tc.function.name, safeParse(tc.function.arguments), a.ctx);
+                const result = allowedToolSet && !allowedToolSet.has(tc.function.name)
+                  ? { error: 'tool not permitted for this agent' }
+                  : await executeTool(tc.function.name, safeParse(tc.function.arguments), a.ctx);
                 messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result).slice(0, 8000) });
               }
               continue;
@@ -1354,11 +1378,15 @@ export async function runAgentLoop(a: AgentLoopArgs): Promise<boolean> {
       // Record the assistant tool-call turn verbatim (required before tool results).
       messages.push({ role: 'assistant', content: content || null, tool_calls: toolCalls });
 
-      // Execute each tool, surface a step line, append the result.
+      // Execute each tool, surface a step line, append the result. A custom
+      // agent's tool subset is enforced here: a call outside the set gets an
+      // error result the model can see (never a crash, never silent execution).
       for (const tc of toolCalls) {
         const label = TOOL_LABELS[tc.function.name] || tc.function.name;
         a.ctx.onStep(`🔧 ${label}…`);
-        const result = await executeTool(tc.function.name, safeParse(tc.function.arguments), a.ctx);
+        const result = allowedToolSet && !allowedToolSet.has(tc.function.name)
+          ? { error: 'tool not permitted for this agent' }
+          : await executeTool(tc.function.name, safeParse(tc.function.arguments), a.ctx);
         messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result).slice(0, 8000) });
       }
     }

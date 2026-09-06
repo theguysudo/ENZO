@@ -51,6 +51,8 @@ USER node
 
 ENV NODE_ENV=production \
     ENZO_GOOGLE_AUTH=0 \
+    ENZO_SELF_HOSTED=1 \
+    ENZO_DATA_DIR=/app/data \
     PORT=5001
 
 # Backend deps first (layer-cache). --include=dev: tsx (the runtime) and
@@ -71,6 +73,9 @@ COPY --from=frontend-build --chown=node:node /build/synthetic-nature/dist ./synt
 # only compose-mounted dir for it — named volumes can't mount a single file),
 # with the path the backend expects left as a symlink; `src/models/` ships its
 # tracked seed JSONs via COPY above and is rewritten in place at runtime.
+# vault-boot.ts also writes here: the instance master key (vault-boot.json,
+# 0o600) and sealed claimed provider keys (vault-keys.json) — generated on
+# first boot, persisted in the enzo-memory volume, never baked into the image.
 RUN mkdir -p data generated-projects src/skills/skills \
  && echo '{ "entries": [] }' > data/memory-store.json \
  && ln -s /app/data/memory-store.json src/core/memory-store.json

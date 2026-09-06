@@ -1,8 +1,8 @@
 import React from 'react'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Ghost } from 'lucide-react'
-import { FlowButton } from '@/components/ui/flow-button'
-import { cn } from '@/lib/utils'
+import { FlowButton } from '../../components/ui/flow-button'
+import { cn } from '../../lib/utils'
 import { useGSAP } from '@gsap/react'
 import { gsap } from 'gsap'
 

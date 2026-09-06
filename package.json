@@ -10,7 +10,7 @@
     "start:prod": "npm run build && pm2 start ecosystem.config.cjs --env production",
     "typecheck": "tsc --noEmit",
     "check:imports": "node scripts/check-tracked-imports.mjs",
-    "test": "tsx tests/agent-tools.test.ts && tsx tests/project-fix.test.ts && tsx tests/project-idor.test.ts && tsx tests/crypto-store.test.ts && tsx synthetic-nature/src/lib/keyVault.test.ts && tsx synthetic-nature/src/lib/vaultRecovery.test.ts && tsx synthetic-nature/src/lib/modelPeer.test.ts && tsx tests/model-sync.test.ts",
+    "test": "tsx tests/agent-tools.test.ts && tsx tests/project-fix.test.ts && tsx tests/project-idor.test.ts && tsx tests/crypto-store.test.ts && tsx synthetic-nature/src/lib/keyVault.test.ts && tsx synthetic-nature/src/lib/vaultRecovery.test.ts && tsx synthetic-nature/src/lib/modelPeer.test.ts && tsx tests/model-sync.test.ts && tsx tests/agents.test.ts && tsx tests/vault-boot.test.ts",
     "ci": "bash scripts/ci-runner.sh",
     "pentest": "bash scripts/pentest.sh",
     "deploy": "npm run build:frontend && git add synthetic-nature/dist && git commit -m \"chore: deploy front-end build $(date -u +'%Y-%m-%dT%H:%M:%SZ')\" && git push enzo-beta main"

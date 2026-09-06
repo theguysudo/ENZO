@@ -189,10 +189,12 @@ export function InteractiveNebulaShader({
   }, [])
 
   return (
+    // pointer-events-none: the shader canvas spans the viewport but must
+    // never intercept clicks meant for the content above it.
     <div
       ref={containerRef}
-      className={`fixed inset-0 bg-background ${className}`}
-      aria-label="Interactive nebula background"
+      className={`pointer-events-none fixed inset-0 bg-background ${className}`}
+      aria-hidden="true"
     />
   )
 }

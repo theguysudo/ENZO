@@ -156,25 +156,33 @@ async function exaReadFull(url: string, apiKey: string, chars: number): Promise<
   return t.slice(0, chars);
 }
 
-/* ── Agent LLM call (70b for judgment, 8b fallback on rate-limit/failure) ── */
+/* ── Agent LLM call (gpt-oss-20b for judgment, qwen3.6 fallback on rate-limit/
+     failure — both live-verified 2026-09-06; the llama models are delisted).
+     qwen3.6's json_object mode is broken server-side (json_validate_failed),
+     so its leg runs in plain mode and the JSON is regex-extracted — the model
+     prepends a thinking preamble. ── */
 async function askAgent(groq: Groq, system: string, user: string): Promise<any> {
-  const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+  const models: Array<{ id: string; jsonMode: boolean }> = [
+    { id: 'openai/gpt-oss-20b', jsonMode: true },
+    { id: 'qwen/qwen3.6-27b', jsonMode: false },
+  ];
   let lastErr: any = null;
   for (const model of models) {
     try {
       const r = await groq.chat.completions.create({
-        model,
+        model: model.id,
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-        response_format: { type: 'json_object' },
+        ...(model.jsonMode ? { response_format: { type: 'json_object' } } : {}),
         temperature: 0.25,
-        max_tokens: 700,
+        max_tokens: 1600, // reasoning models: ~600 reasoning tokens before the JSON
       });
       const raw = (r.choices[0]?.message?.content ?? '{}')
         .replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-      return JSON.parse(raw);
+      const m = raw.match(/\{[\s\S]*\}/); // strip qwen's thinking preamble
+      return JSON.parse(m ? m[0] : raw);
     } catch (e: any) {
       lastErr = e;
-      // Retry with smaller model on any failure (rate limits included)
+      // Retry with the fallback model on any failure (rate limits included)
     }
   }
   throw lastErr;

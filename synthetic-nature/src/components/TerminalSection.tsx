@@ -1040,6 +1040,11 @@ export default function TerminalSection({
   // user never has to type it. Reset on every real user message.
   const forcedPromptRef = useRef<string | null>(null)
   const autoContinueCountRef = useRef(0)
+  // Latest handleSend — a setTimeout re-send (auto-continue) and chip-triggered
+  // sends must read the CURRENT send closure, not whatever one happened to be
+  // mounted when the timer was armed: a stale closure replays the previous
+  // turn's messages state as history and wipes the input box.
+  const handleSendRef = useRef<(e: React.FormEvent) => void>(() => {})
   const MAX_AUTO_CONTINUE = 5
   const [autoContinuing, setAutoContinuing] = useState(false)
   // Stable on-disk project container id for the active session. Every project
@@ -1090,6 +1095,10 @@ export default function TerminalSection({
   // become a Stop button that cancels generation (like real AI platforms).
   const abortRef = useRef<AbortController | null>(null)
 
+  // Unmount (tab switch / maximize toggle): abort any in-flight SSE so the
+  // reader loop's pending fetch resolves instead of pinning the closure.
+  useEffect(() => () => { abortRef.current?.abort() }, [])
+
   // Learned skills dropdown (/skills)
   const [showSkillsPanel, setShowSkillsPanel] = useState(false)
   const [skillsList, setSkillsList] = useState<LearnedSkill[]>([])
@@ -1101,7 +1110,21 @@ export default function TerminalSection({
   // File Attachment & Drag-and-Drop state
   const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
   const [isDragging, setIsDragging] = useState(false)
+  // The file input, messages scroller and composer render in BOTH the docked
+  // terminal and the maximize portal. A plain ref gets nulled when the portal
+  // unmounts (Attach button / auto-scroll / auto-grow then die silently in the
+  // docked view), so each tracks its live nodes and prunes detached ones —
+  // .current is whichever instance is actually in the DOM right now.
+  const fileInputLive = useRef<Set<HTMLInputElement>>(new Set())
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const attachFileInput = (el: HTMLInputElement | null) => {
+    if (el) { fileInputLive.current.add(el); fileInputRef.current = el }
+    else {
+      for (const node of fileInputLive.current) if (!node.isConnected) fileInputLive.current.delete(node)
+      const next = [...fileInputLive.current]
+      fileInputRef.current = next.length ? next[next.length - 1] : null
+    }
+  }
 
   const [downloadingPDF, setDownloadingPDF] = useState<number | null>(null)
 
@@ -1556,7 +1579,16 @@ export default function TerminalSection({
       .catch((err) => console.warn('Backend recommendation error:', err))
   }, [showModelPicker, messages, availableCatalog, activeModel])
 
-  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const messagesLive = useRef<Set<HTMLDivElement>>(new Set())
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null)
+  const attachMessagesContainer = (el: HTMLDivElement | null) => {
+    if (el) { messagesLive.current.add(el); messagesContainerRef.current = el }
+    else {
+      for (const node of messagesLive.current) if (!node.isConnected) messagesLive.current.delete(node)
+      const next = [...messagesLive.current]
+      messagesContainerRef.current = next.length ? next[next.length - 1] : null
+    }
+  }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowUp') {
@@ -1634,7 +1666,16 @@ export default function TerminalSection({
   // Ref to the composer textarea so its height can be managed from an effect
   // (React resets .value on re-render but leaves the manually-set inline height,
   // which is what made the box stay expanded after sending a long prompt).
-  const composerRef = useRef<HTMLTextAreaElement>(null)
+  const composerRef = useRef<HTMLTextAreaElement | null>(null)
+  const composerLive = useRef<Set<HTMLTextAreaElement>>(new Set())
+  const attachComposer = (el: HTMLTextAreaElement | null) => {
+    if (el) { composerLive.current.add(el); composerRef.current = el }
+    else {
+      for (const node of composerLive.current) if (!node.isConnected) composerLive.current.delete(node)
+      const next = [...composerLive.current]
+      composerRef.current = next.length ? next[next.length - 1] : null
+    }
+  }
   // When true, the next handleSend call skips the research intent intercept
   // (used by the ResearchDepthDialog after the user has already made a choice).
   const skipResearchCheckRef = useRef(false)
@@ -1807,8 +1848,21 @@ export default function TerminalSection({
     setMessages([])
     setDismissedWindows([])
     setSessions([])
-    setActiveSessionId('')
-    setDismissedWindows([])
+    // Mint a fresh active session instead of leaving activeSessionId='' — the
+    // persist-effects key on it, so an empty id meant post-Clear chats were
+    // never written to a session and vanished on reload.
+    const fresh: ChatSession = {
+      id: `sess_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      title: 'New Chat',
+      model: activeModel.id,
+      chatMode,
+      isImageSession: isImageActive,
+      messages: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    }
+    setSessions([fresh])
+    setActiveSessionId(fresh.id)
     try {
       window.localStorage.removeItem(HISTORY_KEY)
       window.localStorage.removeItem(SESSIONS_KEY)
@@ -2021,8 +2075,7 @@ export default function TerminalSection({
   }
 
   const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // A forced prompt (browser auto-continue) bypasses the input box + its guard.
+    e.preventDefault()    // A forced prompt (browser auto-continue) bypasses the input box + its guard.
     const forced = forcedPromptRef.current
     forcedPromptRef.current = null
     if ((!inputValue.trim() && attachedFiles.length === 0 && !forced) || isStreaming) return
@@ -2269,6 +2322,12 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
     // so without this the whole point of thinking mode scrolled away the moment
     // the answer landed.
     let reasoningText = ''
+    // Stream-local research ledger: the finalize blocks read it (like
+    // reasoningText) because the researchSteps state captured in this closure
+    // stays [] no matter what the stream emits — every finalized reply
+    // silently lost its research steps. Declared beside the other stream
+    // accumulators so the catch blocks can see it too.
+    const runSteps: string[] = []
     try {
       const realModel = getRealModelId(activeModel)
       const orKey = keyVault.getItem('enzo.keys.openrouter') || ''
@@ -2383,6 +2442,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
             reasoningText += decoded + '\n'
             setThoughtChain((prev) => prev + decoded + '\n')
           } else if (frameEvent === 'search') {
+            runSteps.push(decoded)
             setResearchSteps((prev) => [...prev, decoded])
           } else if (frameEvent === 'mode') {
             // Auto mode (per-message): the backend LLM picked the best execution
@@ -2498,7 +2558,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
         text: fullText,
         mode: (autoRoutedModeRef.current as ChatMode) ?? chatMode,
         reasoning: reasoningText.trim() || undefined,
-        researchSteps: researchSteps.length > 0 ? [...researchSteps] : undefined,
+        researchSteps: runSteps.length > 0 ? [...runSteps] : undefined,
       }
       // Register the final doc/project (bypassing the stream throttle) so the
       // side-panel preview always matches the finished reply. Salvage: the
@@ -2525,7 +2585,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
           setAutoContinuing(true)
           forcedPromptRef.current = 'continue'
           console.debug(`[auto-continue] browser round ${autoContinueCountRef.current}/${MAX_AUTO_CONTINUE} — ${reason}`)
-          setTimeout(() => { void handleSend({ preventDefault() {} } as React.FormEvent) }, 400)
+          setTimeout(() => { handleSendRef.current({ preventDefault() {} } as React.FormEvent) }, 400)
         } else {
           setAutoContinuing(false)
         }
@@ -2533,8 +2593,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
     } catch (err: any) {
       // User pressed Stop — keep whatever was already streamed as the message
       // instead of surfacing a scary "aborted" error.
-      if (err?.name === 'AbortError' && fullText.trim()) {
-        setIsStreaming(false)
+      if (err?.name === 'AbortError' && fullText.trim()) {        setIsStreaming(false)
         // Register the partial build so the preview keeps the produced files.
         // Salvage: the user stopped the stream, so rescue the file that was
         // mid-write instead of losing it.
@@ -2546,9 +2605,23 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
             text: fullText,
             mode: (autoRoutedModeRef.current as ChatMode) ?? chatMode,
             interrupted: true,
-            researchSteps: researchSteps.length > 0 ? [...researchSteps] : undefined,
+            researchSteps: runSteps.length > 0 ? [...runSteps] : undefined,
           },
         ])
+        setStreamedText('')
+        setThoughtChain('')
+        setResearchSteps([])
+        setRetryInfo(null)
+        abortRef.current = null
+        return
+      }
+
+      // Stop pressed before the first token arrived: nothing to salvage and
+      // nothing to report — an "aborted" error bubble here would be noise the
+      // user caused on purpose. Drop the turn quietly (the user message stays
+      // in history; they can resend or edit it).
+      if (err?.name === 'AbortError' && !fullText.trim()) {
+        setIsStreaming(false)
         setStreamedText('')
         setThoughtChain('')
         setResearchSteps([])
@@ -2573,7 +2646,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
             text,
             mode: chatMode,
             interrupted: partial.length > 0 ? true : undefined,
-            researchSteps: researchSteps.length > 0 ? [...researchSteps] : undefined,
+            researchSteps: runSteps.length > 0 ? [...runSteps] : undefined,
           },
         ])
         setIsStreaming(false)
@@ -2584,6 +2657,9 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
         abortRef.current = null
     }
   }
+
+  // Keep the latest send closure reachable from timers/chips (see handleSendRef).
+  handleSendRef.current = handleSend
 
   // Stop generation: abort the in-flight stream. The catch in handleSend
   // finalizes whatever was already streamed as a partial message.
@@ -2929,7 +3005,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
         {/* Hidden file input for attachment button & drag-drop */}
         <input
           type="file"
-          ref={fileInputRef}
+          ref={attachFileInput}
           onChange={handleFileSelect}
           multiple
           className="hidden"
@@ -3282,7 +3358,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
 
         {/* ─── Messages Feed ─────────────────────────────────────────── */}
         <div
-          ref={messagesContainerRef}
+          ref={attachMessagesContainer}
           className="relative z-10 flex-1 overflow-y-auto px-6 py-6 space-y-6 scrollbar-thin"
           style={{ minHeight: 220 }}
         >
@@ -3739,7 +3815,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
               <div className="flex items-start gap-3 px-4 pt-3.5 pb-2">
                 <textarea
                   rows={1}
-                  ref={composerRef}
+                  ref={attachComposer}
                   value={inputValue}
                   onChange={(e) => {
                     setInputValue(e.target.value)
@@ -3928,7 +4004,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
               { label: 'Summarize', icon: <Layers size={12} />, action: () => { setInputValue('Summarize: ') } },
               { label: 'Write for me', icon: <Rocket size={12} />, action: () => { setInputValue('Write a ') } },
               { label: 'Debug', icon: <Cpu size={12} />, action: () => { setInputValue('Debug this: ') } },
-              { label: 'Compare models', icon: <Palette size={12} />, action: () => { setInputValue('models'); handleSend({ preventDefault: () => {} } as any) } },
+              { label: 'Compare models', icon: <Palette size={12} />, action: () => { forcedPromptRef.current = 'models'; handleSendRef.current({ preventDefault: () => {} } as React.FormEvent) } },
             ] as { label: string; icon: React.ReactNode; action: () => void }[]).map(({ label, icon, action }) => (
               <motion.button
                 key={label}

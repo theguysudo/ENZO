@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useInView, useReducedMotion } from 'framer-motion'
 import { Check, ArrowRight } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { useLowPowerMode } from '@/hooks/useLowPowerMode'
+import { cn } from '../../lib/utils'
+import { useLowPowerMode } from '../../hooks/useLowPowerMode'
 
 /**
  * PricingSection — three tiers laid out exactly like every SaaS pricing page,

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import TerminalSection from './components/TerminalSection'
+import AgentsSection from './components/AgentsSection'
 import { DrawLineText } from './components/ui/draw-line-text'
 import { TactileButton } from './components/ui/tactile-button'
 import { LiquidButton } from './components/ui/liquid-button'
@@ -857,7 +858,7 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [appView, setAppView] = useState<AppView>('home')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [activeTab, setActiveTab] = useState<'marketplace' | 'terminal' | 'vault'>('marketplace')
+  const [activeTab, setActiveTab] = useState<'marketplace' | 'terminal' | 'vault' | 'agents'>('marketplace')
   const [onboardingStep, setOnboardingStep] = useState<OnbStep>(1)
   const [catalog, setCatalog] = useState<CatalogModel[]>(CATALOG_MODELS)
   const [showTour, setShowTour] = useState(() => {
@@ -1201,7 +1202,7 @@ function App() {
   // see the useCraftHomepageFlag call below.
   const isThemedHomeSurface = (appView === 'home' || appView === 'docs' || appView === '404') && !isLoggedIn
   const isWorkspaceSurface =
-    appView === 'home' && isLoggedIn && (activeTab === 'marketplace' || activeTab === 'terminal' || activeTab === 'vault')
+    appView === 'home' && isLoggedIn && (activeTab === 'marketplace' || activeTab === 'terminal' || activeTab === 'vault' || activeTab === 'agents')
 
   // Craft-polish blast-radius firewall. The value matters: "home" also arms the
   // rules that style the homepage's own sections, "docs" arms only the shared
@@ -1381,7 +1382,7 @@ function App() {
           <div className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
             {isLoggedIn ? (
               <>
-                {(['marketplace', 'terminal', 'vault'] as const).map((tab) => (
+                {(['marketplace', 'terminal', 'agents', 'vault'] as const).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -1399,7 +1400,7 @@ function App() {
                         className="absolute inset-0 rounded-full bg-white/10 border border-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                       />
                     )}
-                    <span className="relative z-10">{tab}</span>
+                    <span className="relative z-10">{tab === 'agents' ? 'Agents' : tab}</span>
                   </button>
                 ))}
               </>
@@ -1726,6 +1727,8 @@ function App() {
                 onSaveSuccess={refreshCatalog}
               />
             )}
+
+            {activeTab === 'agents' && <AgentsSection />}
           </div>
         )}
 

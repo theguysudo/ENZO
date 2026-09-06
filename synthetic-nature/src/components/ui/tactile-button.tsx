@@ -217,6 +217,14 @@ function buildTactileDocument(opts: {
   btn.addEventListener('click', function () {
     gulp = 1;
     slosh = Math.min(1.6, slosh + 0.7);
+  });
+
+  /* The iframe box is PAD*2 larger than the visible capsule so the button's
+     drop shadow isn't clipped. A click in that transparent ring would land on
+     the iframe body and die — so the document itself is the click target and
+     every click inside the iframe (button clicks bubble here too) forwards
+     to the parent exactly once. */
+  document.addEventListener('click', function () {
     try { window.parent.postMessage({ type: '${CLICK_MESSAGE}' }, '*'); } catch (err) {}
   });
 
