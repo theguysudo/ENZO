@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="470" viewBox="0 0 860 470" role="img" aria-label="ENZO CI pipeline: 7 stages including a black-box security pentest, dependency audits failing on high or critical vulnerabilities, and keyless BYOK boot verification — versus a typical self-hosted AI app CI with type-check and unit tests only.">
+  <title>ENZO CI pipeline vs typical self-hosted AI app CI</title>
+  <defs>
+    <style><![CDATA[
+      .bar { fill: url(#grad); transform-origin: left center; }
+      .bar-other { fill: #3d4451; transform-origin: left center; }
+      .label { font: 600 14px -apple-system, 'Segoe UI', sans-serif; fill: #e6edf3; }
+      .val { font: 700 20px -apple-system, 'Segoe UI', sans-serif; fill: #58d68d; }
+      .val-other { font: 700 20px -apple-system, 'Segoe UI', sans-serif; fill: #8b949e; }
+      .sub { font: 400 12.5px -apple-system, 'Segoe UI', sans-serif; fill: #8b949e; }
+      .axis { stroke: #30363d; stroke-width: 1; }
+      .tick { font: 400 11px -apple-system, 'Segoe UI', sans-serif; fill: #768390; }
+      @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+      .a1 { animation: grow 0.9s ease-out both; }
+      .a2 { animation: grow 0.9s ease-out 0.35s both; }
+      .a3 { animation: grow 0.9s ease-out 0.7s both; }
+      .a4 { animation: grow 0.9s ease-out 1.05s both; }
+      .a5 { animation: grow 0.9s ease-out 1.4s both; }
+      .a6 { animation: grow 0.9s ease-out 1.75s both; }
+      @media (prefers-reduced-motion: reduce) { .bar, .bar-other { animation: none; } }
+    ]]></style>
+    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1a7f37"/>
+      <stop offset="1" stop-color="#3fb950"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Title -->
+  <text x="20" y="32" style="font: 700 18px -apple-system, 'Segoe UI', sans-serif; fill:#e6edf3;">What runs on every push to ENZO's main branch</text>
+  <text x="20" y="52" class="sub">7 CI stages — vs the typical self-hosted AI app's 2. Numbers from .github/workflows/ci.yml.</text>
+
+  <!-- ENZO bars (green, left column of labels) -->
+  <!-- y positions: 95,140,185,230,275,320,365 ; bar max width 560 starting x=290 -->
+
+  <text x="20" y="100" class="label">Security checks</text>
+  <rect x="290" y="86" width="500" height="22" rx="4" class="bar a1"/>
+  <text x="800" y="102" class="val" text-anchor="end">5 gates</text>
+  <text x="20" y="118" class="sub">no key literals · .env never tracked · vault-only key reads</text>
+
+  <text x="20" y="145" class="label">Unit + typecheck</text>
+  <rect x="290" y="131" width="420" height="22" rx="4" class="bar a2"/>
+  <text x="800" y="147" class="val" text-anchor="end">298 asserts</text>
+  <text x="20" y="163" class="sub">ts strict · every imported file tracked · agent + vault suites</text>
+
+  <text x="20" y="190" class="label">Dependency audit</text>
+  <rect x="290" y="176" width="380" height="22" rx="4" class="bar a3"/>
+  <text x="800" y="192" class="val" text-anchor="end">fail on high</text>
+  <text x="20" y="208" class="sub">backend + frontend, zero high/critical allowed to merge</text>
+
+  <text x="20" y="235" class="label">Black-box pentest</text>
+  <rect x="290" y="221" width="560" height="22" rx="4" class="bar a4"/>
+  <text x="800" y="237" class="val" text-anchor="end">44 asserts</text>
+  <text x="20" y="253" class="sub">auth bypass · hostile payloads · IDOR · stream integrity — in CI, on every push</text>
+
+  <text x="20" y="280" class="label">Keyless boot proof</text>
+  <rect x="290" y="266" width="440" height="22" rx="4" class="bar a5"/>
+  <text x="800" y="282" class="val" text-anchor="end">verified</text>
+  <text x="20" y="298" class="sub">server must boot BYOK with zero provider keys + no onboarding bypass</text>
+
+  <text x="20" y="325" class="label">Prod build</text>
+  <rect x="290" y="311" width="360" height="22" rx="4" class="bar a6"/>
+  <text x="800" y="327" class="val" text-anchor="end">+ bundle cap</text>
+  <text x="20" y="343" class="sub">vite build · gzipped bundle size budget enforced</text>
+
+  <!-- Comparison row -->
+  <line x1="20" y1="372" x2="840" y2="372" class="axis"/>
+
+  <text x="20" y="400" class="label" style="fill:#8b949e;">Typical self-hosted AI app</text>
+  <rect x="290" y="386" width="120" height="22" rx="4" class="bar-other a1"/>
+  <text x="800" y="402" class="val-other" text-anchor="end">typecheck + a few unit tests</text>
+
+  <text x="20" y="440" class="sub">ENZO: Apache-2.0 · 44k lines of TypeScript · CI green on main · pentest report at docs/SECURITY.md</text>
+</svg>
