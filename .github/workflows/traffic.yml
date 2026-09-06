@@ -1,0 +1,50 @@
+# Weekly traffic snapshot → TRAFFIC.md + shields.io badge JSONs.
+#
+# Why: GitHub's traffic API keeps only 14 days of data and is invisible to
+# anyone without push access. This job archives it publicly (numbers only)
+# into TRAFFIC.md and traffic/*.json (rendered as live badges in the README)
+# so visitors can see adoption on the repo page itself.
+#
+# The repo API (stars) is public; views/clones/referrers need a token with
+# push access — the default GITHUB_TOKEN in actions/checkout v4+ has it.
+#
+# Guard: this file lives in the PUBLIC repo (theguysudo/ENZO) only. The
+# private development repo (Enzo_Beta) must never display its own traffic,
+# so the job hard-fails if it finds itself running anywhere else.
+name: traffic
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: traffic-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    if: github.repository == 'theguysudo/ENZO'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render traffic snapshot
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/traffic-render.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name "enzo-traffic-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add TRAFFIC.md traffic/
+          if git diff --cached --quiet; then
+            echo "no traffic change to commit"
+          else
+            git commit -m "chore(traffic): weekly snapshot [skip ci]"
+            git push
+          fi
