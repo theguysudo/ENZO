@@ -93,6 +93,42 @@ def main():
         print("error: no endpoint responded — aborting", file=sys.stderr)
         return 1
 
+    # Previous snapshot's numbers (the committed badge files are the record
+    # of the last run that actually got data). A failed fetch this run keeps
+    # them instead of zeroing the archive.
+    def load_prev(*paths):
+        vals = {}
+        for p in paths:
+            try:
+                with open(p) as f:
+                    vals[p] = int(json.load(f)["message"])
+            except Exception:  # noqa: BLE001 — missing/corrupt = no prev value
+                vals[p] = None
+        return vals
+
+    pv = load_prev("traffic/total-views.json", "traffic/unique-views.json")
+    pc = load_prev("traffic/total-clones.json", "traffic/unique-clones.json")
+    ps = load_prev("traffic/stars.json")
+    prev_v = ({"count": pv["traffic/total-views.json"],
+               "uniques": pv["traffic/unique-views.json"]}
+              if pv["traffic/total-views.json"] is not None else None)
+    prev_c = ({"count": pc["traffic/total-clones.json"],
+               "uniques": pc["traffic/unique-clones.json"]}
+              if pc["traffic/total-clones.json"] is not None else None)
+    prev_s = ps["traffic/stars.json"]
+
+    if views or clones or stars is not None:
+        # Merge into the existing snapshot: keep last week's real numbers
+        # wherever this fetch has no data, so a 403 run can never zero the
+        # archive. (Values the API returned always win.)
+        merged_v = views or prev_v
+        merged_c = clones or prev_c
+        merged_s = stars if stars is not None else prev_s
+    else:
+        merged_v, merged_c, merged_s = prev_v, prev_c, prev_s
+        print("warning: no traffic data this run — kept the previous snapshot",
+              file=sys.stderr)
+
     now = datetime.now(timezone.utc)
     stamp = now.strftime("%Y-%m-%d")
     week_label = f"{now.year}-W{now.isocalendar()[1]:02d}"
@@ -100,10 +136,10 @@ def main():
     # ── badge JSONs (schema shields.io understands) ──────────────────────────
     os.makedirs("traffic", exist_ok=True)
     badges = {
-        "total-views": (views or {}).get("count"),
-        "unique-views": (views or {}).get("uniques"),
-        "total-clones": (clones or {}).get("count"),
-        "unique-clones": (clones or {}).get("uniques"),
+        "total-views": merged_v.get("count"),
+        "unique-views": merged_v.get("uniques"),
+        "total-clones": merged_c.get("count"),
+        "unique-clones": merged_c.get("uniques"),
     }
     # Dynamic badge colors: bigger = warmer. Tasteful, not traffic-light.
     def color(n):
@@ -113,27 +149,18 @@ def main():
         return "yellow"
 
     for key, value in badges.items():
-        # A failed fetch (None) must not write a fake "0" badge or clobber a
-        # real number: keep the previous file, or write an explicit "no
-        # data" state only when a stale file would otherwise linger.
-        if value is None:
-            if os.path.exists(f"traffic/{key}.json"):
-                value, badge_color = "no data", "lightgrey"
-            else:
-                continue
-        else:
-            badge_color = color(value)
         with open(f"traffic/{key}.json", "w") as f:
             json.dump({"schemaVersion": 1, "label": key.replace("-", " "),
-                       "message": f"{value}", "color": badge_color}, f, indent=2)
-        print(f"traffic/{key}.json -> {value}")
+                       "message": f"{value if value is not None else 'no data'}",
+                       "color": color(value) if value is not None else "lightgrey"}, f, indent=2)
+        print(f"traffic/{key}.json -> {value if value is not None else 'no data'}")
 
     # Stars badge comes straight from the repo object (no 14-day retention).
-    if stars is not None:
+    if merged_s is not None:
         with open("traffic/stars.json", "w") as f:
             json.dump({"schemaVersion": 1, "label": "stars",
-                       "message": f"{stars}", "color": color(stars)}, f, indent=2)
-        print(f"traffic/stars.json -> {stars}")
+                       "message": f"{merged_s}", "color": color(merged_s)}, f, indent=2)
+        print(f"traffic/stars.json -> {merged_s}")
 
     # ── TRAFFIC.md rolling archive ────────────────────────────────────────────
     # Layout: header (badges) → current week table → all-time totals →
@@ -154,21 +181,25 @@ def main():
         f"**Week {week_label}** (updated {stamp})\n\n"
         f"| Last 14 days | Views | Unique visitors | Clones | Unique cloners | Stars |\n"
         f"|---|---|---|---|---|---|\n"
-        f"| totals | {(views or {}).get('count', 0)} | {(views or {}).get('uniques', 0)} "
-        f"| {(clones or {}).get('count', 0)} | {(clones or {}).get('uniques', 0)} "
-        f"| {stars if stars is not None else '—'} |\n\n"
+        f"| totals | {(merged_v or {}).get('count', 0)} | {(merged_v or {}).get('uniques', 0)} "
+        f"| {(merged_c or {}).get('count', 0)} | {(merged_c or {}).get('uniques', 0)} "
+        f"| {merged_s if merged_s is not None else '—'} |\n\n"
     )
 
     # Daily rows for the snapshot window (most recent first, zeros included so
-    # gaps stay visible).
+    # gaps stay visible). Written only when this run actually got fresh daily
+    # data — a 403 run keeps last week's rows instead of collapsing to zero.
     daily_rows = ""
     for day in reversed((views or {}).get("views", [])):
         d = day["timestamp"][:10]
         v, u = day["count"], day["uniques"]
-        # clone counts for the same day, when available
+        # clone counts for the same day, when available (— when the clones
+        # fetch failed — never a fake 0)
         c = next((x for x in (clones or {}).get("clones", [])
                   if x["timestamp"][:10] == d), None)
-        daily_rows += f"| {d} | {v} | {u} | {c['count'] if c else 0} | {c['uniques'] if c else 0} |\n"
+        cc = f"{c['count']}" if c else ("—" if clones is None else 0)
+        cu = f"{c['uniques']}" if c else ("—" if clones is None else 0)
+        daily_rows += f"| {d} | {v} | {u} | {cc} | {cu} |\n"
     if daily_rows:
         header += (
             "| Day | Views | Unique | Clones | Unique |\n"
@@ -185,6 +216,11 @@ def main():
         header += "\n"
 
     if "## Latest snapshot" in existing:
+        if not (views or clones):
+            # No fresh 14-day data this run (only stars, or nothing) —
+            # leave the previous snapshot's daily table intact.
+            print("TRAFFIC.md unchanged (no fresh traffic data)", file=sys.stderr)
+            return 0
         # Replace everything from '## Latest snapshot' up to the next '## '
         # (or EOF) with the new snapshot, keeping weekly history below.
         start = existing.index("## Latest snapshot")

@@ -6,7 +6,12 @@
 # so visitors can see adoption on the repo page itself.
 #
 # The repo API (stars) is public; views/clones/referrers need a token with
-# push access — the default GITHUB_TOKEN in actions/checkout v4+ has it.
+# push access. GITHUB_TOKEN is an App installation token and GitHub returns
+# "Resource not accessible by integration" (403) for traffic endpoints on
+# those, categorically — verified against this repo. So the run prefers a
+# TRAFFIC_PAT repo secret (a classic PAT with repo scope on an account with
+# push access) and only falls back to GITHUB_TOKEN (which still renders the
+# stars badge and preserves the previous snapshot's numbers).
 #
 # Guard: this file lives in the PUBLIC repo (theguysudo/ENZO) only. The
 # private development repo (Enzo_Beta) must never display its own traffic,
@@ -34,7 +39,7 @@ jobs:
 
       - name: Render traffic snapshot
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.TRAFFIC_PAT || secrets.GITHUB_TOKEN }}
         run: python3 scripts/traffic-render.py
 
       - name: Commit if changed
