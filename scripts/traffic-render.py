@@ -28,12 +28,14 @@ and nothing it fetches contains secrets (traffic endpoints return counts).
 import json
 import os
 import sys
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 
 TOKEN = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
 REPO = os.environ.get("GITHUB_REPOSITORY") or "theguysudo/ENZO"
-API = f"https://api.github.com/repos/{REPO}/traffic"
+API_REPO = f"https://api.github.com/repos/{REPO}"
+API = f"{API_REPO}/traffic"
 REQ_HEADERS = {
     "Accept": "application/vnd.github+json",
     "User-Agent": "traffic-render",
@@ -48,8 +50,8 @@ if not TOKEN:
           file=sys.stderr)
 
 
-def get(path):
-    req = urllib.request.Request(API + path, headers=REQ_HEADERS)
+def get(path, base=API):
+    req = urllib.request.Request(base + path, headers=REQ_HEADERS)
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)
 
@@ -63,7 +65,7 @@ def main():
     for name, fn in (("views", lambda: get("/views")),
                      ("clones", lambda: get("/clones")),
                      ("referrers", lambda: get("/popular/referrers")),
-                     ("repo", lambda: get(""))):
+                     ("repo", lambda: get("", base=API_REPO))):
         try:
             data = fn()
             ok_any = True
@@ -75,6 +77,15 @@ def main():
                 referrers = data
             elif name == "repo":
                 stars = data.get("stargazers_count")
+        except urllib.error.HTTPError as e:
+            # Surface the response body — GitHub puts the real reason there
+            # ("Resource not accessible by integration", rate limit, …).
+            try:
+                detail = e.read().decode("utf-8", "replace")[:300]
+            except Exception:  # noqa: BLE001
+                detail = ""
+            print(f"warning: {name} fetch failed: {e}"
+                  + (f" — {detail}" if detail else ""), file=sys.stderr)
         except Exception as e:  # noqa: BLE001 — one endpoint down ≠ abort
             print(f"warning: {name} fetch failed: {e}", file=sys.stderr)
 
@@ -89,10 +100,10 @@ def main():
     # ── badge JSONs (schema shields.io understands) ──────────────────────────
     os.makedirs("traffic", exist_ok=True)
     badges = {
-        "total-views": (views or {}).get("count", 0),
-        "unique-views": (views or {}).get("uniques", 0),
-        "total-clones": (clones or {}).get("count", 0),
-        "unique-clones": (clones or {}).get("uniques", 0),
+        "total-views": (views or {}).get("count"),
+        "unique-views": (views or {}).get("uniques"),
+        "total-clones": (clones or {}).get("count"),
+        "unique-clones": (clones or {}).get("uniques"),
     }
     # Dynamic badge colors: bigger = warmer. Tasteful, not traffic-light.
     def color(n):
@@ -102,9 +113,19 @@ def main():
         return "yellow"
 
     for key, value in badges.items():
+        # A failed fetch (None) must not write a fake "0" badge or clobber a
+        # real number: keep the previous file, or write an explicit "no
+        # data" state only when a stale file would otherwise linger.
+        if value is None:
+            if os.path.exists(f"traffic/{key}.json"):
+                value, badge_color = "no data", "lightgrey"
+            else:
+                continue
+        else:
+            badge_color = color(value)
         with open(f"traffic/{key}.json", "w") as f:
             json.dump({"schemaVersion": 1, "label": key.replace("-", " "),
-                       "message": f"{value}", "color": color(value)}, f, indent=2)
+                       "message": f"{value}", "color": badge_color}, f, indent=2)
         print(f"traffic/{key}.json -> {value}")
 
     # Stars badge comes straight from the repo object (no 14-day retention).
