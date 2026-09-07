@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from 'react'
 import { createPortal } from 'react-dom'
 import * as keyVault from '../lib/keyVault'
+import SystemPulse from './SystemPulse'
 import gsap from 'gsap'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -3093,7 +3094,9 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
               <span className="hidden sm:inline">Projects</span>
             </button>
             <div className="flex items-center gap-1">
-              <span className="text-white/40">ONLINE</span>
+              {/* Live system pulse — ECG heartbeat beside the status text,
+                  flatline label the moment backend or catalog stops answering. */}
+              <SystemPulse />
             </div>
           </div>
         </div>

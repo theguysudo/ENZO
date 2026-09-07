@@ -70,6 +70,8 @@ import {
 } from 'lucide-react'
 import { animate, stagger } from 'animejs'
 import { OnboardingView, type OnbStep } from './components/OnboardingView'
+import WeatherWidget from './components/WeatherWidget'
+import SmokeNav from './components/SmokeNav'
 import { HomepageDocs } from './components/HomepageDocs'
 import { DocsDimOverlay } from './components/DocsDimOverlay'
 import { TourOverlay } from './components/TourOverlay'
@@ -1363,8 +1365,13 @@ function App() {
       </AnimatePresence>
 
       {/* ── Floating Liquid Glass Navigation Bar ── */}
-      <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-40 w-[92%] md:w-[85%] max-w-6xl rounded-full border border-white/10 bg-[#06070c]/60 backdrop-blur-2xl px-6 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] flex items-center justify-between transition-all duration-300 ring-1 ring-white/[0.03]">
-        <div className="w-full flex items-center justify-between">
+      <nav className="overflow-hidden fixed top-4 left-1/2 -translate-x-1/2 z-40 w-[92%] md:w-[85%] max-w-6xl rounded-full border border-white/10 bg-[#06070c]/60 backdrop-blur-2xl px-6 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] flex items-center justify-between transition-all duration-300 ring-1 ring-white/[0.03]">
+        {/* Smoke ambience behind the glass. Left of center so the centered
+            links (workspace tabs when logged in; Home/Docs/Pricing when
+            logged out) and right-side controls keep a clean dark field.
+            Docs stays out — its light-mode chrome would fight the smoke. */}
+        {(isWorkspaceSurface || (appView === 'home' && !isLoggedIn)) && <SmokeNav />}
+        <div className="relative z-10 w-full flex items-center justify-between">
           <button
             type="button"
             onClick={() => {
@@ -1459,9 +1466,9 @@ function App() {
               <TactileButton
                 label="Login"
                 mode={isLightTheme ? 'light' : 'dark'}
-                width={124}
-                height={40}
-                fontSize={10}
+                width={116}
+                height={32}
+                fontSize={9}
                 onClick={handleLogin}
                 className="shrink-0"
               />
@@ -2433,6 +2440,13 @@ function MarketplaceSection({
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Ambient weather — IP-located side widget; expands on hover only
+                and stays inside the sidebar column, so it never overlaps the
+                catalog grid. Hidden below lg where the sidebar stacks on top. */}
+            <div className="hidden lg:flex justify-center border-t border-white/5 pt-5">
+              <WeatherWidget />
             </div>
 
           </div>

@@ -13,10 +13,18 @@
 // Extracted from App.tsx unchanged — same JSX, same classes, same copy.
 
 import { useState, useEffect, useRef } from 'react'
+import {
+  Stepper,
+  StepperIndicator,
+  StepperItem,
+  StepperSeparator,
+  StepperTrigger,
+} from './ui/stepper'
 import { motion, AnimatePresence } from 'framer-motion'
 import { staggerIn } from '../lib/gsapTransitions'
 import * as keyVault from '../lib/keyVault'
 import { GOOGLE_AUTH } from '../lib/variant'
+import SaveSwitch from './SaveSwitch'
 import { DotGridBackground } from './ui/modern-login-signup'
 
 // ─── PKCE helpers ─────────────────────────────────────────────────────────────
@@ -47,6 +55,19 @@ function OnboardingView({
   const step5Ref = useRef<HTMLDivElement | null>(null)
   const [step, setStep] = useState<OnbStep>(initialStep)
   const [error, setError] = useState<string | null>(null)
+
+  // Which step's indicator is spinning. The active step's beat: the number
+  // lands briefly, then the spinner takes over and keeps spinning for as
+  // long as the user is on that step. No clear-timer — the spinner ends only
+  // by leaving the step (completed steps morph to checks via data-state, so
+  // nothing gets stuck).
+  const [loadingStep, setLoadingStep] = useState<OnbStep | null>(null)
+
+  useEffect(() => {
+    setLoadingStep(null)
+    const t = setTimeout(() => setLoadingStep(step), 600)
+    return () => clearTimeout(t)
+  }, [step])
 
   const [orKey, setOrKey] = useState('')
   const [orStatus, setOrStatus] = useState<KeyStatus>('idle')
@@ -206,35 +227,33 @@ function OnboardingView({
       >
         {/* Header */}
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 font-mono-display text-[9px] uppercase tracking-widest text-white/50 mb-3">
-            <span className="h-1.5 w-1.5 rounded-full bg-white/60 animate-pulse" />
-            Setup · Step {step} of 5
-          </div>
           <h2 className="font-garamond text-4xl font-normal text-white">Connect Providers</h2>
-          <p className="mt-1 text-xs text-white/40 font-light">Link your API accounts to unlock the full intelligence stack.</p>
         </div>
 
-        {/* Progress steps */}
-        <div className="mb-6 flex items-center justify-center gap-3">
-          {STEPS.map((label, i) => {
-            const sNum = (i + 1) as OnbStep
-            const isActive = sNum === step
-            const isDone = sNum < step
-            return (
-              <div key={label} className="flex shrink-0 items-center gap-3">
-                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border font-mono-display text-[9px] transition-all duration-300 ${
-                  isDone ? 'border-white/40 bg-white/10 text-white/60' :
-                  isActive ? 'border-white/60 bg-white/10 text-white step-active' :
-                  'border-white/10 text-white/20'
-                }`}>
-                  {isDone ? '✓' : sNum}
-                </div>
-                {i < STEPS.length - 1 && (
-                  <div className={`h-px w-8 shrink-0 transition-all duration-500 ${isDone ? 'bg-white/30' : 'bg-white/8'}`} />
-                )}
-              </div>
-            )
-          })}
+        {/* Progress steps — animated Stepper: the step number morphs into a
+            check as steps complete and separators light up behind it. On
+            arrival the active indicator plays a number→spinner settle beat.
+            Only completed steps are clickable (jump back); forward movement
+            stays gated on the key checks in goNext. */}
+        <div className="mb-6">
+          <Stepper
+            value={step}
+            onValueChange={(v) => { if (v < step) { setError(null); setStep(v as OnbStep) } }}
+          >
+            {STEPS.map((label, i) => (
+              <StepperItem
+                key={label}
+                step={i + 1}
+                className="[&:not(:last-child)]:flex-1"
+                loading={loadingStep === (i + 1 as OnbStep)}
+              >
+                <StepperTrigger>
+                  <StepperIndicator className="size-7 font-mono-display text-[9px]" />
+                </StepperTrigger>
+                {i < STEPS.length - 1 && <StepperSeparator />}
+              </StepperItem>
+            ))}
+          </Stepper>
         </div>
 
         <AnimatePresence mode="wait">
@@ -255,7 +274,6 @@ function OnboardingView({
                   </div>
                   <div className="mt-0.5 text-[10px] text-white/40">Chat engine · 300+ AI models</div>
                 </div>
-                <OnbStatusDot status={orStatus} />
               </div>
 
               {/* OpenRouter Button — one interactive element, not an <a> wrapping
@@ -298,14 +316,11 @@ function OnboardingView({
                   onChange={(e) => { setOrKey(e.target.value); setOrStatus('idle') }}
                   className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none"
                 />
-                <button onClick={saveOrKey} disabled={!orKey.trim()}
-                  className={`shrink-0 rounded-xl border px-4 py-2.5 font-mono-display text-[9px] uppercase tracking-wider transition-all hover:-translate-y-0.5 disabled:opacity-30 ${orStatus === 'connected' ? 'border-green-500/40 bg-green-500/10 text-green-400' : 'border-white/20 bg-white/5 text-white/80'}`}
-                >{orStatus === 'connected' ? '✓' : 'Save'}</button>
+                <SaveSwitch saved={orStatus === 'connected'} disabled={!orKey.trim()} onClick={saveOrKey}>Save</SaveSwitch>
               </div>
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] text-white/30">Free models · no credit card</span>
-                <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="shrink-0 font-mono-display text-[9px] uppercase tracking-wider text-white/40 hover:text-white/70 transition-colors">Get key ↗</a>
               </div>
 
               {error && <OnbError msg={error} />}
@@ -335,7 +350,6 @@ function OnboardingView({
                   </div>
                   <div className="mt-0.5 text-[10px] text-white/40">Nemotron, Llama NIM · 40K free credits</div>
                 </div>
-                <OnbStatusDot status={nvidiaStatus} />
               </div>
 
               <div className="flex items-start gap-2.5 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
@@ -397,9 +411,7 @@ function OnboardingView({
                     onChange={(e) => { setNvidiaKey(e.target.value); setNvidiaStatus('idle') }}
                     className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-white/25 focus:outline-none"
                   />
-                  <button onClick={saveNvidiaKey} disabled={!nvidiaKey.trim()}
-                    className={`shrink-0 rounded-xl border px-4 py-2.5 font-mono-display text-[9px] uppercase tracking-wider transition-all hover:-translate-y-0.5 disabled:opacity-30 ${nvidiaStatus === 'saved' ? 'border-green-500/40 bg-green-500/10 text-green-400' : 'border-white/20 bg-white/5 text-white/80'}`}
-                  >{nvidiaStatus === 'saved' ? '✓' : 'Save'}</button>
+                  <SaveSwitch saved={nvidiaStatus === 'saved'} disabled={!nvidiaKey.trim()} onClick={saveNvidiaKey}>Save</SaveSwitch>
                 </div>
               </div>
 
@@ -437,7 +449,6 @@ function OnboardingView({
                   </div>
                   <div className="mt-0.5 text-[10px] text-white/40">Gemini Flash — free tier, no credit card</div>
                 </div>
-                <OnbStatusDot status={googleStatus} />
               </div>
 
               <div className="flex items-start gap-2.5 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
@@ -477,15 +488,12 @@ function OnboardingView({
                     onChange={(e) => { setGoogleToken(e.target.value); setGoogleStatus('idle') }}
                     className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-orange-400/40 focus:outline-none"
                   />
-                  <button onClick={saveGoogleToken} disabled={!googleToken.trim()}
-                    className={`shrink-0 rounded-xl border px-4 py-2.5 font-mono-display text-[9px] uppercase tracking-wider transition-all hover:-translate-y-0.5 disabled:opacity-30 ${googleStatus === 'saved' ? 'border-green-500/40 bg-green-500/10 text-green-400' : 'border-orange-400/30 bg-orange-400/5 text-orange-300'}`}
-                  >{googleStatus === 'saved' ? '✓' : 'Save'}</button>
+                  <SaveSwitch saved={googleStatus === 'saved'} disabled={!googleToken.trim()} onClick={saveGoogleToken}>Save</SaveSwitch>
                 </div>
               </div>
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] text-white/30">Powers Gemini models across the hub</span>
-                <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="shrink-0 font-mono-display text-[9px] uppercase tracking-wider text-orange-300/70 hover:text-orange-300 transition-colors">Get key ↗</a>
               </div>
 
               {error && <OnbError msg={error} />}
@@ -521,7 +529,6 @@ function OnboardingView({
                   </div>
                   <div className="mt-0.5 text-[10px] text-white/40">Neural web search · powers deep research</div>
                 </div>
-                <OnbStatusDot status={exaStatus} />
               </div>
 
               <div className="flex items-start gap-2.5 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
@@ -561,15 +568,12 @@ function OnboardingView({
                     onChange={(e) => { setExaKey(e.target.value); setExaStatus('idle') }}
                     className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-cyan-400/40 focus:outline-none"
                   />
-                  <button onClick={saveExaKey} disabled={!exaKey.trim()}
-                    className={`shrink-0 rounded-xl border px-4 py-2.5 font-mono-display text-[9px] uppercase tracking-wider transition-all hover:-translate-y-0.5 disabled:opacity-30 ${exaStatus === 'saved' ? 'border-green-500/40 bg-green-500/10 text-green-400' : 'border-cyan-400/30 bg-cyan-400/5 text-cyan-300'}`}
-                  >{exaStatus === 'saved' ? '✓' : 'Save'}</button>
+                  <SaveSwitch saved={exaStatus === 'saved'} disabled={!exaKey.trim()} onClick={saveExaKey}>Save</SaveSwitch>
                 </div>
               </div>
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] text-white/30">Optional — ENZO works without it, add later in Vault</span>
-                <a href="https://exa.ai/api-keys" target="_blank" rel="noopener noreferrer" className="shrink-0 font-mono-display text-[9px] uppercase tracking-wider text-cyan-300/70 hover:text-cyan-300 transition-colors">Get key ↗</a>
               </div>
 
               {error && <OnbError msg={error} />}
@@ -605,7 +609,6 @@ function OnboardingView({
                   </div>
                   <div className="mt-0.5 text-[10px] text-white/40">Llama, Qwen, DeepSeek on Workers free tier</div>
                 </div>
-                <OnbStatusDot status={cfStatus} />
               </div>
 
               <div className="flex items-start gap-2.5 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
@@ -645,9 +648,7 @@ function OnboardingView({
                     onChange={(e) => { setCfToken(e.target.value); setCfStatus('idle') }}
                     className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-sky-400/40 focus:outline-none"
                   />
-                  <button onClick={saveCfToken} disabled={!cfToken.trim()}
-                    className={`shrink-0 rounded-xl border px-4 py-2.5 font-mono-display text-[9px] uppercase tracking-wider transition-all hover:-translate-y-0.5 disabled:opacity-30 ${cfStatus === 'saved' ? 'border-green-500/40 bg-green-500/10 text-green-400' : 'border-sky-400/30 bg-sky-400/5 text-sky-300'}`}
-                  >{cfStatus === 'saved' ? '✓' : 'Save'}</button>
+                  <SaveSwitch saved={cfStatus === 'saved'} disabled={!cfToken.trim()} onClick={saveCfToken}>Save</SaveSwitch>
                 </div>
               </div>
 
@@ -661,7 +662,6 @@ function OnboardingView({
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] text-white/30">Optional — add later in Vault</span>
-                <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener noreferrer" className="shrink-0 font-mono-display text-[9px] uppercase tracking-wider text-sky-300/70 hover:text-sky-300 transition-colors">Get token ↗</a>
               </div>
 
               {error && <OnbError msg={error} />}
@@ -684,12 +684,6 @@ function OnboardingView({
 
       </motion.div>
     </motion.div>
-  )
-}
-
-function OnbStatusDot({ status }: { status: KeyStatus }) {
-  return (
-    <span className={`h-2 w-2 shrink-0 rounded-full transition-all duration-500 ${status !== 'idle' ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)] animate-pulse' : 'bg-white/15'}`} />
   )
 }
 
