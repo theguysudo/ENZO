@@ -17,20 +17,32 @@ SRC = "synthetic-nature/public/android-chrome-512x512.png"
 OUT = "docs/assets/enzo-banner.svg"
 
 # layout ------------------------------------------------------------------
-W, H = 860, 160
+W, H = 860, 190
 TILE = 96
 RX = 22
-TILE_Y = 32
-LOCKUP_W = TILE + 40 + 330          # tile + gap + text block
+TILE_Y = 45
+LOCKUP_W = TILE + 40 + 246          # tile + gap + measured glyph block
 X0 = (W - LOCKUP_W) // 2           # centered lockup start
 TILE_X = X0
 MARK = 84
 MX, MY = TILE_X + 6, TILE_Y + 6     # mark origin inside tile
-BASELINE = 100
+BASELINE = 113
 TAG_Y = BASELINE + 28
 LETTERS = ["E", "N", "Z", "O"]
-LCOLS = ["#7C5CFF", "#6E7BFF", "#4B9DFF", "#22D3EE"]
+LCOLS = ["#ffffff", "#ffffff", "#ffffff", "#ffffff"]
 TAGLINE = "the AI workspace with no middleman"
+
+# hand-drawn loop around the lockup — path lifted verbatim from KokonutUI's
+# HandWrittenTitle (1200x600 stage) and affine-mapped onto the banner
+CIRC_RAW = [
+    ("M", [(950, 90)]),
+    ("C", [(1250, 300), (1050, 480), (600, 520)]),
+    ("C", [(250, 520), (150, 480), (150, 300)]),
+    ("C", [(150, 120), (350, 80), (600, 80)]),
+    ("C", [(850, 80), (950, 180), (950, 180)]),
+]
+CIRC_SRC_CX, CIRC_SRC_CY = 600, 300
+CIRC_RX, CIRC_RY = 280, 80          # target half-extents around the lockup
 
 COLS, ROWS = 4, 4                   # shard grid over the mark
 LETTER_T0, LETTER_STAG, LETTER_DUR = 1.15, 0.16, 0.5
@@ -72,6 +84,51 @@ def mark_img():
     return cropped.resize((MARK, MARK), Image.LANCZOS)
 
 
+def circ_path():
+    """Map the KokonutUI 1200x600 loop onto the banner lockup.
+
+    The source loop's drawn extents differ from its control-point bbox (the
+    right bulge never reaches its x=1250 control), so flatten the beziers by
+    sampling and normalize against the SAMPLED bbox — the drawn loop then
+    lands symmetric around the lockup on both axes.
+    """
+    pts = []          # on-curve + sampled points, for true extents
+    cur = None        # current on-curve point
+    segs = []         # (p0, c1, c2, p2) cubics
+    for cmd, seg in CIRC_RAW:
+        if cmd == "M":
+            cur = seg[0]
+            pts.append(cur)
+        else:
+            c1, c2, p2 = seg
+            segs.append((cur, c1, c2, p2))
+            cur = p2
+    for p0, c1, c2, p2 in segs:
+        for i in range(33):
+            t = i / 32
+            u = 1 - t
+            x = u**3*p0[0] + 3*u*u*t*c1[0] + 3*u*t*t*c2[0] + t**3*p2[0]
+            y = u**3*p0[1] + 3*u*u*t*c1[1] + 3*u*t*t*c2[1] + t**3*p2[1]
+            pts.append((x, y))
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    sx_lo, sx_hi, sy_lo, sy_hi = min(xs), max(xs), min(ys), max(ys)
+    lockup_cx = (TILE_X + TILE_X + TILE + 40 + 246) / 2
+    lockup_cy = TILE_Y + TILE / 2
+    def map_pt(x, y):
+        nx = (x - (sx_lo + sx_hi) / 2) / ((sx_hi - sx_lo) / 2)
+        ny = (y - (sy_lo + sy_hi) / 2) / ((sy_hi - sy_lo) / 2)
+        return lockup_cx + nx * CIRC_RX, lockup_cy + ny * CIRC_RY
+    d = []
+    for cmd, seg in CIRC_RAW:
+        mapped = [map_pt(x, y) for x, y in seg]
+        if cmd == "M":
+            d.append(f"M {mapped[0][0]:.1f} {mapped[0][1]:.1f}")
+        else:
+            d.append("C " + " ".join(f"{mx:.1f},{my:.1f}" for mx, my in mapped))
+    return " ".join(d)
+
+
 def build():
     tile_b64 = b64_png(rounded_tile())
     mark_b64 = b64_png(mark_img())
@@ -104,31 +161,6 @@ def build():
     s.append("<title>ENZO</title>")
     s.append("<defs>")
     s.append(
-        '<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
-        '<stop offset="0" stop-color="#0d1117"/>'
-        '<stop offset="1" stop-color="#171230"/>'
-        "</linearGradient>"
-    )
-    s.append(
-        '<radialGradient id="sheenA" cx="0.15" cy="0" r="1.1">'
-        '<stop offset="0" stop-color="#7C5CFF" stop-opacity="0.14"/>'
-        '<stop offset="1" stop-color="#7C5CFF" stop-opacity="0"/>'
-        "</radialGradient>"
-    )
-    s.append(
-        '<radialGradient id="sheenB" cx="0.95" cy="1" r="1.1">'
-        '<stop offset="0" stop-color="#22D3EE" stop-opacity="0.10"/>'
-        '<stop offset="1" stop-color="#22D3EE" stop-opacity="0"/>'
-        "</radialGradient>"
-    )
-    s.append(
-        '<linearGradient id="shine" x1="0" y1="0" x2="1" y2="0">'
-        '<stop offset="0" stop-color="#ffffff" stop-opacity="0"/>'
-        '<stop offset="0.5" stop-color="#ffffff" stop-opacity="0.07"/>'
-        '<stop offset="1" stop-color="#ffffff" stop-opacity="0"/>'
-        "</linearGradient>"
-    )
-    s.append(
         '<filter id="tsh" x="-40%" y="-40%" width="180%" height="180%">'
         '<feDropShadow dx="0" dy="5" stdDeviation="9" flood-color="#000000" flood-opacity="0.5"/>'
         "</filter>"
@@ -146,12 +178,17 @@ def build():
         )
     s.append("</defs>")
 
-    s.append(f'<rect width="{W}" height="{H}" rx="18" fill="url(#bg)"/>')
-    s.append(f'<rect width="{W}" height="{H}" rx="18" fill="url(#sheenA)"/>')
-    s.append(f'<rect width="{W}" height="{H}" rx="18" fill="url(#sheenB)"/>')
+    s.append(f'<rect width="{W}" height="{H}" rx="18" fill="#000000"/>')
     s.append(
         f'<rect x="0.5" y="0.5" width="{W-1}" height="{H-1}" rx="18" '
         f'fill="none" stroke="#30363d" stroke-width="1"/>'
+    )
+
+    # hand-drawn loop sketching itself around the lockup (KokonotUI motion)
+    s.append(
+        f'<path class="circ" d="{circ_path()}" pathLength="1" fill="none" '
+        f'stroke="#ffffff" stroke-width="6" stroke-linecap="round" '
+        f'stroke-linejoin="round"/>'
     )
 
     # wordmark letters
@@ -162,9 +199,10 @@ def build():
             f'style="font:800 76px -apple-system,\'Segoe UI\',sans-serif;letter-spacing:2px" '
             f'fill="{LCOLS[i]}">{ch}</text>'
         )
-    tag_x = TILE_X + TILE + 42
+    tag_x = TILE_X + TILE + 40 + 246 / 2
     s.append(
-        f'<text class="tg" x="{tag_x}" y="{TAG_Y}" '
+        f'<text class="tg" x="{tag_x:.1f}" y="{TAG_Y}" '
+        f'text-anchor="middle" '
         f'style="font:500 17px -apple-system,\'Segoe UI\',sans-serif" '
         f'fill="#8b949e">{TAGLINE}</text>'
     )
@@ -180,12 +218,6 @@ def build():
     # mark shards: clip windows fly in and settle into the official mark
     for delay, fx, fy, sx, sy, sw, sh, i in shards:
         s.append(f'<g class="sh s{i}" clip-path="url(#c{i})"><use href="#mk" xlink:href="#mk"/></g>')
-
-    # glass glint sweeping the bar (subtle, repeating)
-    s.append(
-        f'<g transform="skewX(-18)"><rect class="glint" x="{-W}" y="0" '
-        f'width="{W}" height="{H}" fill="url(#shine)"/></g>'
-    )
 
     # ---- CSS: settled base states, 'both' fill, reduced-motion safe ----
     css = ["<style><![CDATA["]
@@ -212,9 +244,11 @@ def build():
     )
     css.append("@keyframes rise { from { opacity: 0; transform: translateY(14px); } }")
     css.append(
-        ".glint { animation: sweep 4.6s linear 2.6s infinite; }"
-        "@keyframes sweep { 0% { transform: translateX(0); } "
-        "45%, 100% { transform: translateX(2360px); } }"
+        ".circ { animation: draw 2.5s cubic-bezier(.43,.13,.23,.96) 2.5s both; }"
+    )
+    css.append(
+        "@keyframes draw { from { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; } "
+        "18% { opacity: .9; } to { stroke-dasharray: 1; stroke-dashoffset: 0; opacity: .9; } }"
     )
     css.append(
         "@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }"

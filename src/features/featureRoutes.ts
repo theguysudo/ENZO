@@ -173,8 +173,20 @@ app.post('/api/gmail/disconnect', requireSameSite, (_req, res) => {
 // at mount): on a fresh instance only the operator who claimed it holds one,
 // so a visitor can't repoint the shared OAuth client at their own app. The
 // status echo never returns the secret — only whether the client is set.
-app.get('/api/gmail/oauth-client', (_req, res) => {
-  res.json({ configured: Boolean((process.env.GOOGLE_CLIENT_ID || '').trim() && (process.env.GOOGLE_CLIENT_SECRET || '').trim()) });
+app.get('/api/gmail/oauth-client', (req, res) => {
+  // The redirect URI the operator must whitelist in Google Console. Derived
+  // from how THIS request reached the server (X-Forwarded-Proto/Host behind
+  // the nginx sidecar, req.secure on bare https) so a duckdns deployment
+  // shows its own URL, localhost shows localhost. The GMAIL_REDIRECT_URI env
+  // override wins when set — an operator who pinned it knows better.
+  const proto = String(req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http') || 'http').split(',')[0].trim()
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim()
+  const derived = host ? `${proto}://${host}/api/gmail/callback` : (process.env.GMAIL_REDIRECT_URI || '')
+  const redirectUri = process.env.GMAIL_REDIRECT_URI || derived
+  res.json({
+    configured: Boolean((process.env.GOOGLE_CLIENT_ID || '').trim() && (process.env.GOOGLE_CLIENT_SECRET || '').trim()),
+    redirectUri,
+  });
 });
 
 app.post('/api/gmail/oauth-client', (req, res) => {

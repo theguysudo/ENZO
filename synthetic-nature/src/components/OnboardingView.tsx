@@ -43,7 +43,7 @@ async function generateCodeChallenge(verifier: string): Promise<string> {
 
 // ─── OnboardingView ───────────────────────────────────────────────────────────
 
-type OnbStep = 1 | 2 | 3 | 4 | 5
+type OnbStep = 1 | 2 | 3 | 4 | 5 | 6
 type KeyStatus = 'idle' | 'connected' | 'saved'
 
 function OnboardingView({
@@ -98,12 +98,14 @@ function OnboardingView({
   const [gClientSecret, setGClientSecret] = useState('')
   const [gClientStatus, setGClientStatus] = useState<KeyStatus>('idle')
   const [gClientConfigured, setGClientConfigured] = useState<boolean | null>(null)
+  const [gRedirectUri, setGRedirectUri] = useState('')
+  const [gCopied, setGCopied] = useState(false)
 
   useEffect(() => {
     if (!GOOGLE_AUTH) {
       fetch('/api/gmail/oauth-client')
         .then((r) => r.json())
-        .then((d) => setGClientConfigured(Boolean(d.configured)))
+        .then((d) => { setGClientConfigured(Boolean(d.configured)); setGRedirectUri(String(d.redirectUri || '')) })
         .catch(() => setGClientConfigured(null))
     }
   }, [])
@@ -246,8 +248,13 @@ function OnboardingView({
       if (exaStatus !== 'saved' && exaKey.trim()) saveExaKey()
       setError(null); setStep(5)
     } else if (step === 5) {
-      // Cloudflare is optional — save if token provided, then finish
+      // Cloudflare is optional — save if token provided, then continue
       if (cfToken.trim()) saveCfToken()
+      setError(null)
+      // Docker variant: the BYO Google OAuth client step follows. Hosted
+      // variant finishes here (the site's own client is pre-configured).
+      setStep(GOOGLE_AUTH ? 5 : 6)
+    } else if (step === 6) {
       setError(null); handleFinish()
     }
   }
@@ -256,7 +263,9 @@ function OnboardingView({
 
   const handleFinish = () => { if (cfToken.trim()) saveCfToken(); onDone() }
 
-  const STEPS = ['OpenRouter', 'NVIDIA NIM', 'Google AI Studio', 'Exa Search', 'Cloudflare']
+  const STEPS = GOOGLE_AUTH
+    ? ['OpenRouter', 'NVIDIA NIM', 'Google AI Studio', 'Exa Search', 'Cloudflare']
+    : ['OpenRouter', 'NVIDIA NIM', 'Google AI Studio', 'Exa Search', 'Cloudflare', 'Gmail OAuth']
 
   return (
     <motion.div
@@ -709,38 +718,7 @@ function OnboardingView({
                 />
               </div>
 
-              {/* ── Your own Google OAuth client (docker variant only) ── */}
-              {!GOOGLE_AUTH && (
-                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono-display text-[10px] uppercase tracking-widest text-white/70">Gmail &amp; Calendar — your own Google app</span>
-                    <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-white/50">Optional</span>
-                    {gClientConfigured === true && (
-                      <span className="text-[10px] text-emerald-400">✓ client set — Connect Gmail works</span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-white/40 leading-relaxed">
-                    Self-hosted instances use <em>your</em> Google OAuth client for the Gmail/Calendar connect flow —
-                    not ours, so nothing depends on our verification status. Create a client at
-                    console.cloud.google.com (APIs &amp; Services → Credentials → OAuth client ID, type Web app),
-                    add this instance's address as an authorized redirect, then paste the pair here.
-                  </p>
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <input type="password" placeholder="Client ID (…apps.googleusercontent.com)" value={gClientId}
-                      onChange={(e) => { setGClientId(e.target.value); setGClientStatus('idle') }}
-                      className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-orange-400/40 focus:outline-none"
-                    />
-                    <input type="password" placeholder="Client secret" value={gClientSecret}
-                      onChange={(e) => { setGClientSecret(e.target.value); setGClientStatus('idle') }}
-                      className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-orange-400/40 focus:outline-none"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-[10px] text-white/30">Saved to this instance's .env — Gmail connect works instantly, no restart</span>
-                    <SaveSwitch saved={gClientStatus === 'saved'} disabled={!gClientId.trim() || !gClientSecret.trim()} onClick={saveGClient}>Save</SaveSwitch>
-                  </div>
-                </div>
-              )}
+              {/* ── BYO Google OAuth client moved to its own step 6 (docker variant) ── */}
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] text-white/30">Optional — add later in Vault</span>
@@ -754,11 +732,145 @@ function OnboardingView({
                   onClick={goNext}
                   className="flex-[2] rounded-2xl border border-white/15 bg-white/5 py-3 font-mono-display text-xs uppercase tracking-widest text-white/80 transition-all hover:bg-white/10 hover:-translate-y-0.5"
                 >
-                  Enter Hub ✓
+                  {!GOOGLE_AUTH ? 'Next: Gmail & Calendar →' : 'Enter Hub ✓'}
                 </button>
               </div>
 
               <p className="text-center text-[10px] text-white/25">Keys stored encrypted on this device · sent only to the ENZO backend you run</p>
+            </motion.div>
+          )}
+
+          {/* ── Step 6: Bring-your-own Google OAuth client (docker variant only) ── */}
+          {!GOOGLE_AUTH && step === 6 && (
+            <motion.div key="s6" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -30 }} transition={{ duration: 0.3 }}
+              className="liquid-glass-panel rounded-3xl p-6 space-y-5"
+            >
+              <div className="flex items-center gap-3 pb-4 border-b border-white/8">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/5 border border-white/10">
+                  <span className="font-mono-display text-xs font-bold text-white/70">@</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono-display text-xs uppercase tracking-widest text-white">Gmail &amp; Calendar</span>
+                    <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-white/50">Optional</span>
+                    {gClientConfigured === true && (
+                      <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-emerald-300">Client set</span>
+                    )}
+                  </div>
+                  <div className="mt-0.5 text-[10px] text-white/40">Connect your mailbox with your own Google OAuth app</div>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <span className="shrink-0 text-white/60 text-xs leading-5">◆</span>
+                <div className="min-w-0 flex-1">
+                  <div className="font-mono-display text-[9px] uppercase tracking-wider text-white/80 font-bold">Your App, Your Mailbox</div>
+                  <p className="mt-0.5 text-[10px] text-white/40 leading-relaxed">
+                    This instance uses <em>your</em> Google OAuth client for Gmail &amp; Calendar — nothing depends on
+                    ours. Create one in Google Cloud Console (free, ~5 min), paste the pair below, and Connect Gmail
+                    works instantly — no restart.
+                  </p>
+                </div>
+              </div>
+
+              {/* Get OAuth client button — mirrors the provider Get-key buttons */}
+              <a
+                href="https://console.cloud.google.com/apis/credentials/oauthclient"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full max-w-md mx-auto"
+              >
+                <div className="mx-auto flex max-w-md items-center justify-center gap-2.5 rounded-2xl border border-white/15 bg-white px-5 py-3 transition-transform duration-150 ease-out hover:-translate-y-0.5">
+                  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                    <path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.7-.2-2.5H12v4.8h6.5c-.3 1.5-1.1 2.8-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.9z"/>
+                    <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1C3.3 21.3 7.3 24 12 24z"/>
+                    <path fill="#FBBC05" d="M5.3 14.3c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3V6.6H1.3C.5 8.2 0 10 0 12s.5 3.8 1.3 5.4l4-3.1z"/>
+                    <path fill="#EA4335" d="M12 4.8c1.8 0 3.4.6 4.6 1.8L20 3.1C18 1.2 15.2 0 12 0 7.3 0 3.3 2.7 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/>
+                  </svg>
+                  <span className="font-mono-display text-xs font-semibold uppercase tracking-widest text-[#3c4043]">Create OAuth Client in Google Console</span>
+                </div>
+              </a>
+
+              {/* Redirect URI to whitelist — copy-to-clipboard, derived from how this instance is reached */}
+              {gRedirectUri && (
+                <div className="flex items-start gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <span className="shrink-0 text-white/60 text-xs leading-5">▸</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-mono-display text-[9px] uppercase tracking-wider text-white/80 font-bold">
+                      2 · Add this as an Authorized Redirect URI (type: Web application)
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-2">
+                      <code className="min-w-0 flex-1 truncate rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 font-mono-display text-[10px] text-cyan-300/90">{gRedirectUri}</code>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(gRedirectUri).catch(() => {}); setGCopied(true); setTimeout(() => setGCopied(false), 1600) }}
+                        className="shrink-0 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 font-mono-display text-[9px] uppercase tracking-wider text-white/70 transition-colors hover:bg-white/10"
+                      >
+                        {gCopied ? '✓ Copied' : 'Copy'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-white/8" />
+                <span className="font-mono-display text-[9px] uppercase tracking-widest text-white/30">3 · paste the pair</span>
+                <div className="h-px flex-1 bg-white/8" />
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <label className="mb-1.5 block font-mono-display text-[9px] uppercase tracking-widest text-white/40">Client ID</label>
+                  <input type="password" placeholder="123456789-abcdefg.apps.googleusercontent.com" value={gClientId}
+                    onChange={(e) => { setGClientId(e.target.value); setGClientStatus('idle') }}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-orange-400/40 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block font-mono-display text-[9px] uppercase tracking-widest text-white/40">Client Secret (shown once by Google — copy it there)</label>
+                  <input type="password" placeholder="GOCSPX-…" value={gClientSecret}
+                    onChange={(e) => { setGClientSecret(e.target.value); setGClientStatus('idle') }}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-orange-400/40 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] text-white/30">Saved to this instance's .env — Gmail connect works instantly</span>
+                <SaveSwitch saved={gClientStatus === 'saved'} disabled={!gClientId.trim() || !gClientSecret.trim()} onClick={saveGClient}>Save</SaveSwitch>
+              </div>
+
+              {gClientStatus === 'saved' && (
+                <a
+                  href="/?gmail-connect=1"
+                  onClick={(e) => { e.preventDefault(); fetch('/api/gmail/auth-url').then((r) => r.json()).then((d) => { if (d.url) window.open(d.url, 'google-oauth', 'width=500,height=600,popup=yes') }).catch(() => {}) }}
+                  className="block w-full max-w-md mx-auto"
+                >
+                  <div className="mx-auto flex max-w-md items-center justify-center gap-2.5 rounded-2xl border border-white/15 bg-white px-5 py-3 transition-transform duration-150 ease-out hover:-translate-y-0.5">
+                    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                      <path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.7-.2-2.5H12v4.8h6.5c-.3 1.5-1.1 2.8-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.9z"/>
+                      <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1C3.3 21.3 7.3 24 12 24z"/>
+                      <path fill="#FBBC05" d="M5.3 14.3c-.2-.7-.4-1.5-.4-2.3s.1-1.6.4-2.3V6.6H1.3C.5 8.2 0 10 0 12s.5 3.8 1.3 5.4l4-3.1z"/>
+                      <path fill="#EA4335" d="M12 4.8c1.8 0 3.4.6 4.6 1.8L20 3.1C18 1.2 15.2 0 12 0 7.3 0 3.3 2.7 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/>
+                    </svg>
+                    <span className="font-mono-display text-xs font-semibold uppercase tracking-widest text-[#3c4043]">Sign in with Google — Connect Gmail</span>
+                  </div>
+                </a>
+              )}
+
+              {error && <OnbError msg={error} />}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={goBack} className="flex-1 rounded-2xl border border-white/10 py-3 font-mono-display text-xs uppercase tracking-widest text-white/40 transition-all hover:border-white/20 hover:text-white/70">← Back</button>
+                <button
+                  onClick={goNext}
+                  className="flex-[2] rounded-2xl border border-white/15 bg-white/5 py-3 font-mono-display text-xs uppercase tracking-widest text-white/80 transition-all hover:bg-white/10 hover:-translate-y-0.5"
+                >
+                  Enter Hub ✓
+                </button>
+              </div>
+
+              <p className="text-center text-[10px] text-white/25">Runs against your own Google app · this instance never contacts ours</p>
             </motion.div>
           )}
 
