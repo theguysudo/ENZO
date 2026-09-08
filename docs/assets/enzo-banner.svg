@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="860" height="190" viewBox="0 0 860 190" role="img" aria-label="ENZO — the AI workspace with no middleman">
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="860" height="190" viewBox="0 0 860 190" role="img" aria-label="ENZO">
 <title>ENZO</title>
 <defs>
 <filter id="tsh" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="5" stdDeviation="9" flood-color="#000000" flood-opacity="0.5"/></filter>
@@ -20,14 +20,11 @@
 <clipPath id="c14"><rect x="245.00" y="114.00" width="21.00" height="21.00"/></clipPath>
 <clipPath id="c15"><rect x="308.00" y="114.00" width="21.00" height="21.00"/></clipPath>
 </defs>
-<rect width="860" height="190" rx="18" fill="#000000"/>
-<rect x="0.5" y="0.5" width="859" height="189" rx="18" fill="none" stroke="#30363d" stroke-width="1"/>
-<path class="circ" d="M 625.4 16.6 C 803.7,93.0 684.8,158.5 417.4,173.0 C 209.4,173.0 150.0,158.5 150.0,93.0 C 150.0,27.5 268.8,13.0 417.4,13.0 C 566.0,13.0 625.4,49.4 625.4,49.4" pathLength="1" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-<text class="lt lt0" x="375" y="113" style="font:800 76px -apple-system,'Segoe UI',sans-serif;letter-spacing:2px" fill="#ffffff">E</text>
-<text class="lt lt1" x="437" y="113" style="font:800 76px -apple-system,'Segoe UI',sans-serif;letter-spacing:2px" fill="#ffffff">N</text>
-<text class="lt lt2" x="499" y="113" style="font:800 76px -apple-system,'Segoe UI',sans-serif;letter-spacing:2px" fill="#ffffff">Z</text>
-<text class="lt lt3" x="561" y="113" style="font:800 76px -apple-system,'Segoe UI',sans-serif;letter-spacing:2px" fill="#ffffff">O</text>
-<text class="tg" x="498.0" y="141" text-anchor="middle" style="font:500 17px -apple-system,'Segoe UI',sans-serif" fill="#8b949e">the AI workspace with no middleman</text>
+<path class="circ" d="M 625.4 16.6 C 803.7,93.0 684.8,158.5 417.4,173.0 C 209.4,173.0 150.0,158.5 150.0,93.0 C 150.0,27.5 268.8,13.0 417.4,13.0 C 566.0,13.0 625.4,49.4 625.4,49.4" pathLength="1" fill="none" stroke="#0d1117" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+<text class="lt lt0" x="375" y="120" style="font:800 76px -apple-system,'Segoe UI',sans-serif;letter-spacing:2px" fill="#0d1117">E</text>
+<text class="lt lt1" x="437" y="120" style="font:800 76px -apple-system,'Segoe UI',sans-serif;letter-spacing:2px" fill="#0d1117">N</text>
+<text class="lt lt2" x="499" y="120" style="font:800 76px -apple-system,'Segoe UI',sans-serif;letter-spacing:2px" fill="#0d1117">Z</text>
+<text class="lt lt3" x="561" y="120" style="font:800 76px -apple-system,'Segoe UI',sans-serif;letter-spacing:2px" fill="#0d1117">O</text>
 <image class="tile" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAABKElEQVR42u3dOxLDMAhAQcH976z0yeTjGAnPeN8BUrAGp3OMouacc9yoiIiS3zH0Xoww9F6MNPzajs4oDL53G9Lwe7chDb8XIQ2/FyENvxchDb8XIY2lt/T0925BGn4vghN0pROkJgDnp+8M2QAn6N6F82MDAAgAAAEAIAAABACAAAAQAAACAEAAAAgAAAEAIAAABACAAAAQAAACAEAAAAgAAAEAIAAABACAAAAQAAACAEAAAAgAAAEAIAAABACAAFwHoOqroDpeRIQNcIIADGeo5/zYACdI+bwS2nd+XjYAwt7hO0FXfAfYgn1P/9sNgLBn+B9PEIT1w//6DoCwdvg/vYQhrBv+GGMcGq6v7tUN/q+/obahfkanBmojzj+YZU/03TCqrsEDB1RovUOoRooAAAAASUVORK5CYII=" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAABKElEQVR42u3dOxLDMAhAQcH976z0yeTjGAnPeN8BUrAGp3OMouacc9yoiIiS3zH0Xoww9F6MNPzajs4oDL53G9Lwe7chDb8XIQ2/FyENvxchDb8XIY2lt/T0925BGn4vghN0pROkJgDnp+8M2QAn6N6F82MDAAgAAAEAIAAABACAAAAQAAACAEAAAAgAAAEAIAAABACAAAAQAAACAEAAAAgAAAEAIAAABACAAAAQAAACAEAAAAgAAAEAIAAABACAAFwHoOqroDpeRIQNcIIADGeo5/zYACdI+bwS2nd+XjYAwt7hO0FXfAfYgn1P/9sNgLBn+B9PEIT1w//6DoCwdvg/vYQhrBv+GGMcGq6v7tUN/q+/obahfkanBmojzj+YZU/03TCqrsEDB1RovUOoRooAAAAASUVORK5CYII=" x="239" y="45" width="96" height="96" filter="url(#tsh)"/>
 <g class="sh s0" clip-path="url(#c0)"><use href="#mk" xlink:href="#mk"/></g>
 <g class="sh s1" clip-path="url(#c1)"><use href="#mk" xlink:href="#mk"/></g>
@@ -85,10 +82,10 @@ image, text, g { }
 .lt1 { animation: rise .50s ease-out 1.31s both; }
 .lt2 { animation: rise .50s ease-out 1.47s both; }
 .lt3 { animation: rise .50s ease-out 1.63s both; }
-.tg { animation: rise .6s ease-out 1.85s both; }
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
 .circ { animation: draw 2.5s cubic-bezier(.43,.13,.23,.96) 2.5s both; }
 @keyframes draw { from { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; } 18% { opacity: .9; } to { stroke-dasharray: 1; stroke-dashoffset: 0; opacity: .9; } }
+@media (prefers-color-scheme: dark) { text.lt { fill: #ffffff; } .circ { stroke: #ffffff; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
 ]]></style>
 </svg>

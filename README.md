@@ -1,7 +1,7 @@
 # ENZO
 
 <p align="center">
-  <img src="docs/assets/enzo-banner.svg" alt="ENZO title bar — the official shield logo forming from shards on a white tile, beside ENZO in white, a hand-drawn circle sketching itself around the lockup, and the tagline: the AI workspace with no middleman" width="860">
+  <img src="docs/assets/enzo-banner.svg" alt="ENZO title bar — the official shield logo forming from shards on a white tile, beside the ENZO wordmark, with a hand-drawn circle sketching itself around the lockup" width="860">
 </p>
 
 <p align="center">
