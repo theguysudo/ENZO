@@ -62,6 +62,18 @@ export function DotGridBackground() {
       u_total_size: { value: 20.0 },
       u_dot_size: { value: 6.0 },
       u_reverse: { value: 0 },
+      // Cursor reactivity (login + onboarding share this background): dots
+      // brighten and swell near the pointer with a smoothed follow, so the
+      // glow drifts liquid instead of snapping. Coordinates are in the
+      // shader's pixel space (window CSS px × 2, top-down origin — fragCoord
+      // is already y-flipped in the vertex shader). w=0 disables (no mouse /
+      // coarse pointer / touch device).
+      u_pointer: { value: new THREE.Vector4(-1e4, -1e4, 0, 0) },
+      // Click void: .xy = click position (same space as u_pointer), .z =
+      // click time in u_time seconds, .w = active. The shader scatters dots
+      // outward from the click, opens a black void, then refills it
+      // center-out over ~0.75s. One void at a time — the latest click wins.
+      u_click: { value: new THREE.Vector4(0, 0, -1e4, 0) },
     }
 
     const material = new THREE.ShaderMaterial({
@@ -86,6 +98,8 @@ export function DotGridBackground() {
         uniform float u_dot_size;
         uniform vec2 u_resolution;
         uniform int u_reverse;
+        uniform vec4 u_pointer;
+        uniform vec4 u_click;
 
         out vec4 fragColor;
 
@@ -98,6 +112,23 @@ export function DotGridBackground() {
             vec2 st = fragCoord.xy;
             st.x -= abs(floor((mod(u_resolution.x, u_total_size) - u_dot_size) * 0.5));
             st.y -= abs(floor((mod(u_resolution.y, u_total_size) - u_dot_size) * 0.5));
+
+            // ── Click scatter ────────────────────────────────────────────
+            // Dots near the click get pushed radially outward (the grid is
+            // sampled from a position shifted toward the click, so the
+            // pattern reads as displaced away). Strength decays over 0.45s
+            // so the grid relaxes back as the void refills. stVoid keeps the
+            // undistorted position for the black-void radius test below.
+            vec2 stVoid = st;
+            float clickAge = u_time - u_click.z;
+            if (u_click.w > 0.5 && clickAge >= 0.0 && clickAge < 1.2) {
+                vec2 dir = st - u_click.xy;
+                float r = max(length(dir), 1.0);
+                dir /= r;
+                float near = 1.0 - smoothstep(50.0, 210.0, r);
+                float amp = near * (1.0 - smoothstep(0.0, 0.45, clickAge)) * 22.0;
+                st -= dir * amp;
+            }
 
             float opacity = step(0.0, st.x) * step(0.0, st.y);
 
@@ -122,6 +153,43 @@ export function DotGridBackground() {
             opacity *= step(current_timing_offset, u_time * animation_speed_factor);
             opacity *= clamp((1.0 - step(current_timing_offset + 0.1, u_time * animation_speed_factor)) * 1.25, 1.0, 1.25);
 
+            // ── Black void + refill ──────────────────────────────────────
+            // At click time (age 0) a void of radius ~130px opens: dots
+            // inside are dark. The refill wave closes from the EDGE toward
+            // the CENTER (radius shrinks), each dot blooming back as the
+            // wavefront passes. Total life ~0.75s: pop open fast
+            // (ease-out on open), close at a steady pace — slow enough to
+            // read, not slow enough to wait for.
+            if (u_click.w > 0.5) {
+                float vAge = clamp(clickAge, -1.0, 2.0);
+                if (vAge >= 0.0 && vAge < 0.75) {
+                    float vRadius = 130.0 * (1.0 - vAge / 0.75);
+                    float vDist = distance(stVoid, u_click.xy);
+                    float edge = smoothstep(vRadius + 14.0, vRadius - 14.0, vDist);
+                    // inside the wavefront → dark; a thin rim brightens
+                    opacity *= 1.0 - edge;
+                    float rim = smoothstep(30.0, 0.0, abs(vDist - vRadius)) * (1.0 - smoothstep(0.5, 0.75, vAge));
+                    opacity = max(opacity, rim * 0.5);
+                }
+            }
+
+            // Cursor glow (no-op when u_pointer.w is 0): each dot brightens
+            // and its cell's fill window widens with a squared falloff from
+            // the pointer, ~150px of reach. Operates on the same opacity
+            // that drives the twinkle, so masked-out cells stay off.
+            if (u_pointer.w > 0.5) {
+                float pd = distance(u_pointer.xy, stVoid);
+                float glow = 1.0 - smoothstep(0.0, 150.0, pd);
+                if (glow > 0.0) {
+                    float swell = glow * glow;
+                    float cellX = fract(st.x / u_total_size);
+                    float cellY = fract(st.y / u_total_size);
+                    float win = u_dot_size / u_total_size * (1.0 + swell * 0.7);
+                    float grown = (1.0 - step(win, cellX)) * (1.0 - step(win, cellY));
+                    opacity = min(1.0, opacity + swell * (0.25 + grown * 0.75));
+                }
+            }
+
             fragColor = vec4(color, opacity);
             fragColor.rgb *= fragColor.a;
         }
@@ -138,6 +206,48 @@ export function DotGridBackground() {
     const mesh = new THREE.Mesh(geometry, material)
     scene.add(mesh)
 
+    // Cursor tracking for the glow: smoothed lerp toward the real pointer so
+    // the highlight drifts liquid-glass. Coordinates are in the shader's
+    // pixel space (window CSS px × 2, TOP-DOWN origin — the vertex shader
+    // y-flips fragCoord, so clientY maps directly, no flip here). Fine-
+    // pointer check keeps touch devices off; a pointer that never moved
+    // stays parked offscreen with w=0 (glow disabled).
+    const finePointer =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(pointer: fine)').matches
+    let glowActive = false
+    let targetX = 0
+    let targetY = 0
+    const onMouseMove = (e: MouseEvent) => {
+      targetX = e.clientX * 2
+      targetY = e.clientY * 2
+      if (!glowActive) {
+        // First move: snap the highlight to the pointer instead of sliding
+        // in from the corner.
+        uniforms.u_pointer.value.x = targetX
+        uniforms.u_pointer.value.y = targetY
+        glowActive = true
+        uniforms.u_pointer.value.w = 1
+      }
+    }
+    if (finePointer) {
+      window.addEventListener('mousemove', onMouseMove, { passive: true })
+    }
+
+    // Click void: a click on any non-interactive area blooms a void at that
+    // point. Buttons/inputs/links/panels are excluded — the effect belongs
+    // to the background, never to controls or the glass step dialog. One
+    // void at a time; the latest click wins.
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target?.closest?.('button, a, input, select, textarea, label, form, [role="button"], .liquid-glass-panel')) return
+      uniforms.u_click.value.x = e.clientX * 2
+      uniforms.u_click.value.y = e.clientY * 2
+      uniforms.u_click.value.z = uniforms.u_time.value
+      uniforms.u_click.value.w = 1
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+
     // ~30fps frame gate + hidden-tab suspension — same graphics budget as
     // every other background in the app. The reveal reads the same at 30fps
     // because the dots twinkle on 5-second periods.
@@ -153,6 +263,10 @@ export function DotGridBackground() {
       if (now - lastDraw < 33) return
       lastDraw = now
       uniforms.u_time.value = (now - startTime) / 1000
+      if (glowActive) {
+        uniforms.u_pointer.value.x += (targetX - uniforms.u_pointer.value.x) * 0.18
+        uniforms.u_pointer.value.y += (targetY - uniforms.u_pointer.value.y) * 0.18
+      }
       renderer.render(scene, camera)
     }
     rafId = requestAnimationFrame(render)
@@ -171,6 +285,8 @@ export function DotGridBackground() {
     window.addEventListener('resize', handleResize)
 
     return () => {
+      if (finePointer) window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('resize', handleResize)
       cancelAnimationFrame(rafId)

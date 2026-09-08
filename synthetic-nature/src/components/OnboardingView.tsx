@@ -275,7 +275,9 @@ function OnboardingView({
       className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black px-4 py-10 overflow-y-auto"
     >
       {/* Same WebGL dot grid as the Google signup step — one visual language
-          from sign-up through the end of API setup. */}
+          from sign-up through the end of API setup. Cursor-reactive: dots
+          brighten and swell around the pointer (handled inside
+          DotGridBackground). */}
       <DotGridBackground />
       <motion.div
         initial={{ y: 32, opacity: 0 }}
@@ -502,7 +504,7 @@ function OnboardingView({
                       <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-white/50">Optional</span>
                     )}
                     {GOOGLE_AUTH && (
-                      <span className="rounded-full border border-orange-400/30 bg-orange-400/10 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-orange-300">Required</span>
+                      <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-white/50">Required</span>
                     )}
                   </div>
                   <div className="mt-0.5 text-[10px] text-white/40">Gemini Flash — free tier, no credit card</div>
@@ -583,7 +585,7 @@ function OnboardingView({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono-display text-xs uppercase tracking-widest text-white">Exa Search</span>
-                    <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-cyan-300">Optional</span>
+                    <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-white/50">Optional</span>
                   </div>
                   <div className="mt-0.5 text-[10px] text-white/40">Neural web search · powers deep research</div>
                 </div>
@@ -663,7 +665,7 @@ function OnboardingView({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono-display text-xs uppercase tracking-widest text-white">Cloudflare Workers AI</span>
-                    <span className="rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-sky-300">Optional</span>
+                    <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-white/50">Optional</span>
                   </div>
                   <div className="mt-0.5 text-[10px] text-white/40">Llama, Qwen, DeepSeek on Workers free tier</div>
                 </div>
@@ -754,7 +756,7 @@ function OnboardingView({
                     <span className="font-mono-display text-xs uppercase tracking-widest text-white">Gmail &amp; Calendar</span>
                     <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-white/50">Optional</span>
                     {gClientConfigured === true && (
-                      <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-emerald-300">Client set</span>
+                      <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-white/50">Client set</span>
                     )}
                   </div>
                   <div className="mt-0.5 text-[10px] text-white/40">Connect your mailbox with your own Google OAuth app</div>
@@ -800,7 +802,7 @@ function OnboardingView({
                       2 · Add this as an Authorized Redirect URI (type: Web application)
                     </div>
                     <div className="mt-1.5 flex items-center gap-2">
-                      <code className="min-w-0 flex-1 truncate rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 font-mono-display text-[10px] text-cyan-300/90">{gRedirectUri}</code>
+                      <code className="min-w-0 flex-1 truncate rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 font-mono-display text-[10px] text-white/60">{gRedirectUri}</code>
                       <button
                         onClick={() => { navigator.clipboard.writeText(gRedirectUri).catch(() => {}); setGCopied(true); setTimeout(() => setGCopied(false), 1600) }}
                         className="shrink-0 rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 font-mono-display text-[9px] uppercase tracking-wider text-white/70 transition-colors hover:bg-white/10"

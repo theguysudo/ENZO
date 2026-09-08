@@ -1365,7 +1365,7 @@ function App() {
       </AnimatePresence>
 
       {/* ── Floating Liquid Glass Navigation Bar ── */}
-      <nav className="overflow-hidden fixed top-4 left-1/2 -translate-x-1/2 z-40 w-[92%] md:w-[85%] max-w-6xl rounded-full border border-white/10 bg-[#06070c]/60 backdrop-blur-2xl px-6 py-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] flex items-center justify-between transition-all duration-300 ring-1 ring-white/[0.03]">
+      <nav className="overflow-hidden fixed top-4 left-1/2 -translate-x-1/2 z-40 w-[92%] md:w-[85%] max-w-6xl rounded-full border border-white/10 bg-[#06070c]/60 backdrop-blur-2xl px-6 h-[46px] shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] flex items-center justify-between transition-all duration-300 ring-1 ring-white/[0.03]">
         {/* Smoke ambience behind the glass. Left of center so the centered
             links (workspace tabs when logged in; Home/Docs/Pricing when
             logged out) and right-side controls keep a clean dark field.

@@ -26,11 +26,10 @@ X0 = (W - LOCKUP_W) // 2           # centered lockup start
 TILE_X = X0
 MARK = 84
 MX, MY = TILE_X + 6, TILE_Y + 6     # mark origin inside tile
-BASELINE = 113
-TAG_Y = BASELINE + 28
+BASELINE = 120
 LETTERS = ["E", "N", "Z", "O"]
-LCOLS = ["#ffffff", "#ffffff", "#ffffff", "#ffffff"]
-TAGLINE = "the AI workspace with no middleman"
+# near-black on transparent (GitHub light mode); CSS flips to white in dark mode
+LCOLS = ["#0d1117", "#0d1117", "#0d1117", "#0d1117"]
 
 # hand-drawn loop around the lockup — path lifted verbatim from KokonutUI's
 # HandWrittenTitle (1200x600 stage) and affine-mapped onto the banner
@@ -46,7 +45,6 @@ CIRC_RX, CIRC_RY = 280, 80          # target half-extents around the lockup
 
 COLS, ROWS = 4, 4                   # shard grid over the mark
 LETTER_T0, LETTER_STAG, LETTER_DUR = 1.15, 0.16, 0.5
-TAG_T0, TAG_DUR = 1.85, 0.6
 
 
 def b64_png(im):
@@ -156,7 +154,7 @@ def build():
     s.append(
         f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
         f'width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" '
-        f'aria-label="ENZO — the AI workspace with no middleman">'
+        f'aria-label="ENZO">'
     )
     s.append("<title>ENZO</title>")
     s.append("<defs>")
@@ -178,16 +176,12 @@ def build():
         )
     s.append("</defs>")
 
-    s.append(f'<rect width="{W}" height="{H}" rx="18" fill="#000000"/>')
-    s.append(
-        f'<rect x="0.5" y="0.5" width="{W-1}" height="{H-1}" rx="18" '
-        f'fill="none" stroke="#30363d" stroke-width="1"/>'
-    )
+    # transparent background — the README surface shows through
 
     # hand-drawn loop sketching itself around the lockup (KokonotUI motion)
     s.append(
         f'<path class="circ" d="{circ_path()}" pathLength="1" fill="none" '
-        f'stroke="#ffffff" stroke-width="6" stroke-linecap="round" '
+        f'stroke="#0d1117" stroke-width="6" stroke-linecap="round" '
         f'stroke-linejoin="round"/>'
     )
 
@@ -199,14 +193,6 @@ def build():
             f'style="font:800 76px -apple-system,\'Segoe UI\',sans-serif;letter-spacing:2px" '
             f'fill="{LCOLS[i]}">{ch}</text>'
         )
-    tag_x = TILE_X + TILE + 40 + 246 / 2
-    s.append(
-        f'<text class="tg" x="{tag_x:.1f}" y="{TAG_Y}" '
-        f'text-anchor="middle" '
-        f'style="font:500 17px -apple-system,\'Segoe UI\',sans-serif" '
-        f'fill="#8b949e">{TAGLINE}</text>'
-    )
-
     # white tile pops in (base state: settled)
     s.append(
         f'<image class="tile" href="data:image/png;base64,{tile_b64}" '
@@ -239,9 +225,6 @@ def build():
         css.append(
             f".lt{i} {{ animation: rise .{int(LETTER_DUR*100)}s ease-out {t0:.2f}s both; }}"
         )
-    css.append(
-        f".tg {{ animation: rise .6s ease-out {TAG_T0:.2f}s both; }}"
-    )
     css.append("@keyframes rise { from { opacity: 0; transform: translateY(14px); } }")
     css.append(
         ".circ { animation: draw 2.5s cubic-bezier(.43,.13,.23,.96) 2.5s both; }"
@@ -249,6 +232,10 @@ def build():
     css.append(
         "@keyframes draw { from { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; } "
         "18% { opacity: .9; } to { stroke-dasharray: 1; stroke-dashoffset: 0; opacity: .9; } }"
+    )
+    css.append(
+        "@media (prefers-color-scheme: dark) { "
+        "text.lt { fill: #ffffff; } .circ { stroke: #ffffff; } }"
     )
     css.append(
         "@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }"
