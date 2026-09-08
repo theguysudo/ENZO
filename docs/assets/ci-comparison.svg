@@ -1,28 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="860" height="470" viewBox="0 0 860 470" role="img" aria-label="ENZO CI pipeline: 7 stages including a black-box security pentest, dependency audits failing on high or critical vulnerabilities, and keyless BYOK boot verification — versus a typical self-hosted AI app CI with type-check and unit tests only.">
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="510" viewBox="0 0 860 510" role="img" aria-label="ENZO CI pipeline: 7 stages including a black-box security pentest, dependency audits failing on high or critical vulnerabilities, and keyless BYOK boot verification — versus a typical self-hosted AI app CI with type-check and unit tests only.">
   <title>ENZO CI pipeline vs typical self-hosted AI app CI</title>
   <defs>
-    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#1a7f37"/>
-      <stop offset="1" stop-color="#3fb950"/>
-    </linearGradient>
-    <!-- sheen sweep that travels along each bar after it grows -->
-    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
-      <stop offset="0.45" stop-color="#ffffff" stop-opacity="0.32"/>
-      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0.32"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
     <style><![CDATA[
-      .bar { fill: url(#grad); transform-box: fill-box; transform-origin: left center; }
-      .bar-other { fill: #3d4451; transform-box: fill-box; transform-origin: left center; }
-      .sheen { fill: url(#sheen); transform-box: fill-box; transform-origin: left center; }
-      .label { font: 600 14px -apple-system, 'Segoe UI', sans-serif; fill: #e6edf3; }
-      .val { font: 700 20px -apple-system, 'Segoe UI', sans-serif; fill: #58d68d; }
-      .val-other { font: 700 20px -apple-system, 'Segoe UI', sans-serif; fill: #8b949e; }
-      .sub { font: 400 12.5px -apple-system, 'Segoe UI', sans-serif; fill: #8b949e; }
-      .axis { stroke: #30363d; stroke-width: 1; }
+      .h1 { font: 700 18px -apple-system, 'Segoe UI', sans-serif; fill: #1f2328; letter-spacing: 0.2px; }
+      .label { font: 600 14px -apple-system, 'Segoe UI', sans-serif; fill: #1f2328; }
+      .val { font: 700 15px -apple-system, 'Segoe UI', sans-serif; fill: #0d1117; }
+      .sub { font: 400 12.5px -apple-system, 'Segoe UI', sans-serif; fill: #57606a; }
+      .bar { fill: #0d1117; transform-box: fill-box; transform-origin: left center; }
+      .track { fill: #eaeef2; }
+      .bar-other { fill: #afb8c1; transform-box: fill-box; transform-origin: left center; }
+      .label-other { font: 600 14px -apple-system, 'Segoe UI', sans-serif; fill: #57606a; }
+      .val-other { font: 700 15px -apple-system, 'Segoe UI', sans-serif; fill: #57606a; }
+      .axis { stroke: #d0d7de; stroke-width: 1; }
       @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-      @keyframes sweep { from { transform: scaleX(0); } to { transform: scaleX(1.6); } }
       @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
       .b1 { animation: grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
       .b2 { animation: grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both; }
@@ -30,70 +20,76 @@
       .b4 { animation: grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.54s both; }
       .b5 { animation: grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.72s both; }
       .b6 { animation: grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.9s both; }
-      .s1 { animation: sweep 0.9s ease-in 0.8s both; }
-      .s2 { animation: sweep 0.9s ease-in 0.98s both; }
-      .s3 { animation: sweep 0.9s ease-in 1.16s both; }
-      .s4 { animation: sweep 0.9s ease-in 1.34s both; }
-      .s5 { animation: sweep 0.9s ease-in 1.52s both; }
-      .s6 { animation: sweep 0.9s ease-in 1.7s both; }
+      .b7 { animation: grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) 1.08s both; }
       .v1 { animation: fade 0.35s ease-out 0.85s both; }
       .v2 { animation: fade 0.35s ease-out 1.03s both; }
       .v3 { animation: fade 0.35s ease-out 1.21s both; }
       .v4 { animation: fade 0.35s ease-out 1.39s both; }
       .v5 { animation: fade 0.35s ease-out 1.57s both; }
       .v6 { animation: fade 0.35s ease-out 1.75s both; }
-      @media (prefers-reduced-motion: reduce) { .bar, .bar-other, .sheen, .val, .val-other { animation: none; } }
+      .v7 { animation: fade 0.35s ease-out 1.93s both; }
+      .bt { animation: fade 0.5s ease-out 1.7s both; }
+      .vt { animation: fade 0.5s ease-out 1.8s both; }
+      @media (prefers-color-scheme: dark) {
+        .h1 { fill: #f0f6fc; } .label { fill: #e6edf3; } .sub { fill: #8b949e; }
+        .bar { fill: #ffffff; } .track { fill: #21262d; } .val { fill: #f0f6fc; }
+        .bar-other { fill: #3d4451; } .val-other { fill: #8b949e; }
+        .label-other { fill: #8b949e; } .axis { stroke: #30363d; }
+      }
+      @media (prefers-reduced-motion: reduce) { .bar, .bar-other, .val, .val-other, .bt, .vt { animation: none; } }
     ]]></style>
   </defs>
 
-  <text x="20" y="32" style="font: 700 18px -apple-system, 'Segoe UI', sans-serif; fill:#e6edf3;">What runs on every push to ENZO's main branch</text>
+  <text x="20" y="32" class="h1">What runs on every push to ENZO's main branch</text>
   <text x="20" y="52" class="sub">7 CI stages — vs the typical self-hosted AI app's 2. Numbers from .github/workflows/ci.yml.</text>
 
-  <!-- ENZO bars (green, left column of labels) -->
-  <!-- y positions: 95,140,185,230,275,320,365 ; bar max width 560 starting x=290 -->
-
   <text x="20" y="100" class="label">Security checks</text>
-  <rect x="290" y="86" width="500" height="22" rx="4" class="bar b1"/>
-  <rect x="290" y="86" width="500" height="22" rx="4" class="sheen s1"/>
-  <text x="800" y="102" class="val v1" text-anchor="end">5 gates</text>
+  <rect x="290" y="86" width="460" height="22" rx="4" class="track"/>
+  <rect x="290" y="86" width="410" height="22" rx="4" class="bar b1"/>
+  <text x="840" y="102" class="val v1" text-anchor="end">5 gates</text>
   <text x="20" y="118" class="sub">no key literals · .env never tracked · vault-only key reads</text>
 
   <text x="20" y="145" class="label">Unit + typecheck</text>
-  <rect x="290" y="131" width="420" height="22" rx="4" class="bar b2"/>
-  <rect x="290" y="131" width="420" height="22" rx="4" class="sheen s2"/>
-  <text x="800" y="147" class="val v2" text-anchor="end">298 asserts</text>
+  <rect x="290" y="131" width="460" height="22" rx="4" class="track"/>
+  <rect x="290" y="131" width="345" height="22" rx="4" class="bar b2"/>
+  <text x="840" y="147" class="val v2" text-anchor="end">298 asserts</text>
   <text x="20" y="163" class="sub">ts strict · every imported file tracked · agent + vault suites</text>
 
   <text x="20" y="190" class="label">Dependency audit</text>
-  <rect x="290" y="176" width="380" height="22" rx="4" class="bar b3"/>
-  <rect x="290" y="176" width="380" height="22" rx="4" class="sheen s3"/>
-  <text x="800" y="192" class="val v3" text-anchor="end">fail on high</text>
+  <rect x="290" y="176" width="460" height="22" rx="4" class="track"/>
+  <rect x="290" y="176" width="310" height="22" rx="4" class="bar b3"/>
+  <text x="840" y="192" class="val v3" text-anchor="end">fail on high</text>
   <text x="20" y="208" class="sub">backend + frontend, zero high/critical allowed to merge</text>
 
   <text x="20" y="235" class="label">Black-box pentest</text>
-  <rect x="290" y="221" width="560" height="22" rx="4" class="bar b4"/>
-  <rect x="290" y="221" width="560" height="22" rx="4" class="sheen s4"/>
-  <text x="800" y="237" class="val v4" text-anchor="end">44 asserts</text>
+  <rect x="290" y="221" width="460" height="22" rx="4" class="track"/>
+  <rect x="290" y="221" width="460" height="22" rx="4" class="bar b4"/>
+  <text x="840" y="237" class="val v4" text-anchor="end">44 asserts</text>
   <text x="20" y="253" class="sub">auth bypass · hostile payloads · IDOR · stream integrity — in CI, on every push</text>
 
   <text x="20" y="280" class="label">Keyless boot proof</text>
-  <rect x="290" y="266" width="440" height="22" rx="4" class="bar b5"/>
-  <rect x="290" y="266" width="440" height="22" rx="4" class="sheen s5"/>
-  <text x="800" y="282" class="val v5" text-anchor="end">verified</text>
+  <rect x="290" y="266" width="460" height="22" rx="4" class="track"/>
+  <rect x="290" y="266" width="360" height="22" rx="4" class="bar b5"/>
+  <text x="840" y="282" class="val v5" text-anchor="end">verified</text>
   <text x="20" y="298" class="sub">server must boot BYOK with zero provider keys + no onboarding bypass</text>
 
   <text x="20" y="325" class="label">Prod build</text>
-  <rect x="290" y="311" width="360" height="22" rx="4" class="bar b6"/>
-  <rect x="290" y="311" width="360" height="22" rx="4" class="sheen s6"/>
-  <text x="800" y="327" class="val v6" text-anchor="end">+ bundle cap</text>
+  <rect x="290" y="311" width="460" height="22" rx="4" class="track"/>
+  <rect x="290" y="311" width="295" height="22" rx="4" class="bar b6"/>
+  <text x="840" y="327" class="val v6" text-anchor="end">+ bundle cap</text>
   <text x="20" y="343" class="sub">vite build · gzipped bundle size budget enforced</text>
 
-  <!-- Comparison row -->
-  <line x1="20" y1="372" x2="840" y2="372" class="axis"/>
+  <text x="20" y="370" class="label">Repo hygiene</text>
+  <rect x="290" y="356" width="460" height="22" rx="4" class="track"/>
+  <rect x="290" y="356" width="245" height="22" rx="4" class="bar b7"/>
+  <text x="840" y="372" class="val v7" text-anchor="end">clean</text>
+  <text x="20" y="388" class="sub">no large binaries · changelog + agent docs present</text>
 
-  <text x="20" y="400" class="label" style="fill:#8b949e;">Typical self-hosted AI app</text>
-  <rect x="290" y="386" width="120" height="22" rx="4" class="bar-other b1"/>
-  <text x="800" y="402" class="val-other v1" text-anchor="end">typecheck + a few unit tests</text>
+  <line x1="20" y1="401" x2="840" y2="401" class="axis"/>
 
-  <text x="20" y="440" class="sub">ENZO: Apache-2.0 · 44k lines of TypeScript · CI green on main · pentest report at docs/SECURITY.md</text>
+  <text x="20" y="445" class="label-other">Typical self-hosted AI app</text>
+  <rect x="290" y="431" width="100" height="22" rx="4" class="bar-other bt"/>
+  <text x="840" y="447" class="val-other vt" text-anchor="end">typecheck + a few unit tests</text>
+
+  <text x="20" y="487" class="sub">ENZO: Apache-2.0 · 44k lines of TypeScript · CI green on main · pentest report at docs/SECURITY.md</text>
 </svg>
