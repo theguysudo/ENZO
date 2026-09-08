@@ -41,7 +41,25 @@ export const VAULT_TO_ENV_MAP: Record<string, string> = {
   cloudflare: 'CLOUDFLARE_API_TOKEN',
   cloudflareAccount: 'CLOUDFLARE_ACCOUNT_ID',
   cloudflareRefresh: 'CLOUDFLARE_REFRESH_TOKEN',
+  // Bring-your-own OAuth client (docker variant): the operator's OWN Google
+  // app for the Gmail/Calendar connect flow — the same BYO philosophy as the
+  // provider keys above, so self-hosters never depend on the hosted app's
+  // verification status. gmailClient() reads process.env live, and this save
+  // updates process.env, so a saved client heals /api/gmail/auth-url WITHOUT
+  // a container restart.
+  gmailClientId: 'GOOGLE_CLIENT_ID',
+  gmailClientSecret: 'GOOGLE_CLIENT_SECRET',
 };
+
+// Env vars in VAULT_TO_ENV_MAP that are NOT provider keys — they never gate
+// the first-key claim. The Gmail OAuth client pair is configuration an
+// operator may pre-seed (compose env) or set later via the onboarding UI;
+// an instance holding ONLY these must stay claimable by the first real
+// provider key (see serverHoldsNoProviderKeys).
+export const NON_PROVIDER_ENV_VARS: ReadonlySet<string> = new Set([
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+]);
 
 // Map .env variable names to vault field IDs
 export const ENV_TO_VAULT_MAP: Record<string, string> = Object.fromEntries(

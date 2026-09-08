@@ -6129,7 +6129,10 @@ import { startNeuralTrainer } from 'src/agents/trainer.js';
 
 // Feature routes (agents/tools/cookbook/compare/docs/email/calendar).
 // Kept in a separate module to keep index.ts readable; all reuse the project’s
-// existing vault pattern (x-*-key headers passed in).
+// existing vault pattern (x-*-key headers passed in). verifyVaultAccess is
+// exposed on the router via locals so the operator-only gmail oauth-client
+// save can gate on the vault token without importing index.ts (circular).
+app.locals.verifyVaultAccess = verifyVaultAccess;
 mountFeatureRoutes(app);
 
 // Custom Agent Builder routes (draft/save/run/history/memory/gather). Vault

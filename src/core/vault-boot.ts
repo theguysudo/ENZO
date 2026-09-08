@@ -44,7 +44,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { VAULT_TO_ENV_MAP } from './env-manager.js';
+import { VAULT_TO_ENV_MAP, NON_PROVIDER_ENV_VARS } from './env-manager.js';
 import { writeSecretFile, readSecretFile } from '../agent/crypto-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -146,9 +146,13 @@ export function initVaultBoot(): void {
 }
 
 /** True when the server holds no provider key at all — eligible for the
- * first-key claim. Runs at request time, so boot-restored keys count. */
+ * first-key claim. Runs at request time, so boot-restored keys count.
+ * NON_PROVIDER_ENV_VARS (the Gmail OAuth client pair) don't count: an
+ * operator who pre-seeded only their OAuth client still gets the claim
+ * window for the first real provider key. */
 export function serverHoldsNoProviderKeys(): boolean {
   for (const envVar of Object.values(VAULT_TO_ENV_MAP)) {
+    if (NON_PROVIDER_ENV_VARS.has(envVar)) continue;
     if ((process.env[envVar] || '').trim()) return false;
   }
   return true;

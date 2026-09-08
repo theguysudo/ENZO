@@ -24,6 +24,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { staggerIn } from '../lib/gsapTransitions'
 import * as keyVault from '../lib/keyVault'
 import { GOOGLE_AUTH } from '../lib/variant'
+import { mintVaultToken } from '../lib/vaultToken'
 import SaveSwitch from './SaveSwitch'
 import { DotGridBackground } from './ui/modern-login-signup'
 
@@ -86,6 +87,54 @@ function OnboardingView({
   const [cfToken, setCfToken] = useState('')
   const [cfAccount, setCfAccount] = useState('')
   const [cfStatus, setCfStatus] = useState<KeyStatus>('idle')
+
+  // Bring-your-own Google OAuth client (docker variant only). The Gmail/
+  // Calendar connect flow runs against the INSTANCE's client id — on the
+  // hosted hub that's ours, on a self-hosted container it's the operator's
+  // own Google app, pasted here instead of editing .env by hand. Saved via
+  // the vault token (same auth as the Vault's .env writer), and the server
+  // picks it up live — no container restart.
+  const [gClientId, setGClientId] = useState('')
+  const [gClientSecret, setGClientSecret] = useState('')
+  const [gClientStatus, setGClientStatus] = useState<KeyStatus>('idle')
+  const [gClientConfigured, setGClientConfigured] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (!GOOGLE_AUTH) {
+      fetch('/api/gmail/oauth-client')
+        .then((r) => r.json())
+        .then((d) => setGClientConfigured(Boolean(d.configured)))
+        .catch(() => setGClientConfigured(null))
+    }
+  }, [])
+
+  const saveGClient = async () => {
+    const id = gClientId.trim()
+    const secret = gClientSecret.trim()
+    if (!id || !secret) return
+    try {
+      const vaultToken = await mintVaultToken()
+      if (!vaultToken) {
+        setError('Could not authorize with this instance (no vault token) — save a provider key first, then retry.')
+        return
+      }
+      const res = await fetch('/api/gmail/oauth-client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-vault-token': vaultToken },
+        body: JSON.stringify({ clientId: id, clientSecret: secret }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setGClientStatus('saved')
+        setGClientConfigured(true)
+        setError(null)
+      } else {
+        setError(data.detail || data.error || 'Google OAuth client was rejected — check both fields.')
+      }
+    } catch {
+      setError('Could not reach this ENZO instance to save the OAuth client.')
+    }
+  }
 
 
   useEffect(() => {
@@ -659,6 +708,39 @@ function OnboardingView({
                   className="min-w-0 flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-sky-400/40 focus:outline-none"
                 />
               </div>
+
+              {/* ── Your own Google OAuth client (docker variant only) ── */}
+              {!GOOGLE_AUTH && (
+                <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono-display text-[10px] uppercase tracking-widest text-white/70">Gmail &amp; Calendar — your own Google app</span>
+                    <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 font-mono-display text-[8px] uppercase tracking-wider text-white/50">Optional</span>
+                    {gClientConfigured === true && (
+                      <span className="text-[10px] text-emerald-400">✓ client set — Connect Gmail works</span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-white/40 leading-relaxed">
+                    Self-hosted instances use <em>your</em> Google OAuth client for the Gmail/Calendar connect flow —
+                    not ours, so nothing depends on our verification status. Create a client at
+                    console.cloud.google.com (APIs &amp; Services → Credentials → OAuth client ID, type Web app),
+                    add this instance's address as an authorized redirect, then paste the pair here.
+                  </p>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <input type="password" placeholder="Client ID (…apps.googleusercontent.com)" value={gClientId}
+                      onChange={(e) => { setGClientId(e.target.value); setGClientStatus('idle') }}
+                      className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-orange-400/40 focus:outline-none"
+                    />
+                    <input type="password" placeholder="Client secret" value={gClientSecret}
+                      onChange={(e) => { setGClientSecret(e.target.value); setGClientStatus('idle') }}
+                      className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 font-mono-display text-xs text-white placeholder:text-white/20 focus:border-orange-400/40 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-[10px] text-white/30">Saved to this instance's .env — Gmail connect works instantly, no restart</span>
+                    <SaveSwitch saved={gClientStatus === 'saved'} disabled={!gClientId.trim() || !gClientSecret.trim()} onClick={saveGClient}>Save</SaveSwitch>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] text-white/30">Optional — add later in Vault</span>

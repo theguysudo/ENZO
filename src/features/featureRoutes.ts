@@ -28,6 +28,8 @@ import crypto from 'crypto';
 import express from 'express';
 import fs from 'fs';
 import { google } from 'googleapis';
+import { saveVaultKeysToEnv } from '../core/env-manager.js';
+import { persistClaimedKey } from '../core/vault-boot.js';
 import { writeSecretFile } from '../agent/crypto-store.js';
 
 const app = express.Router();
@@ -116,6 +118,15 @@ export function gmailConsentUrl(): string {
 }
 
 app.get('/api/gmail/auth-url', (_req, res) => {
+  // Docker variant gap found in v1.1.0 live testing: with no client
+  // configured, generateAuthUrl still returns a URL — one with an EMPTY
+  // client_id, which Google renders as a dead-end error page. Say so
+  // plainly instead; the frontend points the operator at the onboarding
+  // step that collects their own client.
+  if (!(process.env.GOOGLE_CLIENT_ID || '').trim() || !(process.env.GOOGLE_CLIENT_SECRET || '').trim()) {
+    res.status(503).json({ error: 'oauth_client_not_configured', detail: 'Set your Google OAuth client (onboarding, last step) to connect Gmail/Calendar on this instance.' });
+    return;
+  }
   res.json({ url: gmailConsentUrl() });
 });
 
@@ -147,6 +158,74 @@ app.get('/api/gmail/status', (_req, res) => {
 app.post('/api/gmail/disconnect', requireSameSite, (_req, res) => {
   try { fs.unlinkSync(GMAIL_TOKENS_PATH); } catch {}
   res.json({ disconnected: true });
+});
+
+// ── Bring-your-own OAuth client (docker variant) ────────────────────────────
+// The self-hosted operator's OWN Google app for the Gmail/Calendar connect
+// flow. Same BYO philosophy as the provider keys: the operator creates an
+// OAuth client in Google Cloud Console, pastes the id/secret here, and the
+// consent flow runs against THEIR app — ENZO's verification status never
+// enters the picture. saveVaultKeysToEnv writes .env AND updates process.env
+// in memory, and gmailClient() reads process.env live, so a saved client
+// heals /api/gmail/auth-url without a container restart.
+//
+// The save is gated on the vault session token (verifyVaultAccess, injected
+// at mount): on a fresh instance only the operator who claimed it holds one,
+// so a visitor can't repoint the shared OAuth client at their own app. The
+// status echo never returns the secret — only whether the client is set.
+app.get('/api/gmail/oauth-client', (_req, res) => {
+  res.json({ configured: Boolean((process.env.GOOGLE_CLIENT_ID || '').trim() && (process.env.GOOGLE_CLIENT_SECRET || '').trim()) });
+});
+
+app.post('/api/gmail/oauth-client', (req, res) => {
+  // Docker variant only (ENZO_GOOGLE_AUTH=0, set by the Dockerfile). On the
+  // hosted instance GOOGLE_CLIENT_ID is the SITE's Google sign-in client —
+  // a visitor rewriting it via this endpoint would break hosted sign-in, so
+  // the endpoint refuses to exist there.
+  if (process.env.ENZO_GOOGLE_AUTH !== '0') {
+    res.status(404).json({ error: 'oauth_client_save_disabled' });
+    return;
+  }
+  // Injected by index.ts at boot (app.locals) so this module never imports
+  // index.ts back. Read at request time — mount order doesn't matter.
+  const verify = ((req.app as any).locals?.verifyVaultAccess) as
+    | ((req: express.Request, res: express.Response, next: express.NextFunction) => void)
+    | undefined;
+  if (!verify) {
+    res.status(501).json({ error: 'oauth_client_save_unavailable' });
+    return;
+  }
+  verify(req, res, () => {
+    try {
+      const { clientId, clientSecret } = req.body || {};
+      const id = String(clientId ?? '').trim();
+      const secret = String(clientSecret ?? '').trim();
+      // Google OAuth client ids look like
+      // <digits>-<random>.apps.googleusercontent.com; secrets are ~24-35
+      // chars. Loose validation — reject empties and obvious pastes of the
+      // wrong field, never block a legitimate format change by Google.
+      if (!id || !/^[0-9]+-[a-z0-9._-]+\.apps\.googleusercontent\.com$/i.test(id)) {
+        res.status(400).json({ error: 'invalid_client_id', detail: 'expected format: <number>-<hash>.apps.googleusercontent.com' });
+        return;
+      }
+      if (!secret || /[\n\r]/.test(secret)) {
+        res.status(400).json({ error: 'invalid_client_secret' });
+        return;
+      }
+      const { updated } = saveVaultKeysToEnv({ gmailClientId: id, gmailClientSecret: secret });
+      // Also seal into the operator-key store (enzo-memory volume) so the
+      // client survives a container recreation — same durability the
+      // first-key claim gives provider keys. Restore is env-empty-only, so
+      // a compose-env pre-seed still wins on purpose.
+      persistClaimedKey('gmailClientId', id);
+      persistClaimedKey('gmailClientSecret', secret);
+      console.log(`[gmail/oauth-client] operator set their own Google OAuth client (${id.slice(0, 12)}…) — Gmail connect now runs against it`);
+      res.json({ success: true, updated });
+    } catch (err: any) {
+      console.error('[gmail/oauth-client] save error:', err?.message || err);
+      res.status(500).json({ error: 'oauth_client_save_failed', detail: String(err?.message ?? err).slice(0, 300) });
+    }
+  });
 });
 
 export function mountFeatureRoutes(app_: express.Application) {

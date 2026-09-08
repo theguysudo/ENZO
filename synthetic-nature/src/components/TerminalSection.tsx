@@ -223,6 +223,10 @@ function ServiceConnections() {
             }
           }, 500)
         }
+      } else if (data.error === 'oauth_client_not_configured') {
+        // Docker variant without the operator's own Google OAuth client:
+        // say what's missing and where to set it instead of a dead popup.
+        alert('Gmail/Calendar connect needs this instance\'s Google OAuth client (last onboarding step — your own client ID + secret from console.cloud.google.com).')
       }
     } catch (err) {
       console.error('Failed to get auth URL:', err)
