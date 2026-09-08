@@ -1,18 +1,11 @@
 # ENZO
 
 <p align="center">
-  <img src="docs/assets/promo.jpg" alt="Keys are sealed in your browser with AES-256-GCM and attached per-request — the ENZO server is a relay that stores none of them, and no middleman sits between you and your provider" width="720">
+  <img src="docs/assets/enzo-banner.svg" alt="ENZO title bar — the official shield logo assembling from shards on a white tile, beside the ENZO wordmark in violet-to-cyan with the tagline: the AI workspace with no middleman" width="860">
 </p>
 
 <p align="center">
   <img src="docs/assets/enzo-demo.gif" alt="60-second no-cut demo: paste your provider key (masked), chat streams a real Groq answer, search the unified model catalog, describe a task once and ENZO drafts the agent's operating manual with the live key, then runs it" width="720">
-</p>
-
-<h1 align="center">ENZO — the AI workspace with no middleman</h1>
-
-<p align="center">
-  <strong>Chat with 300+ models. Build agents that write their own operating manuals.<br/>Research, generate code, and run it all — on your keys, on your infrastructure.</strong><br/>
-  Nothing sits in between metering you, marking up your tokens, or holding your credentials.
 </p>
 
 <p align="center">
@@ -35,7 +28,7 @@
   <a href="#security"><img src="https://img.shields.io/badge/self--hosted-BYOK-purple" alt="Self-hosted"></a>
 </p>
 
-> When you send a message, the request goes from your browser through ENZO to the provider you picked, and you pay that provider their normal price. **Nothing sits in between taking a cut.** There is no ENZO account, no usage meter, no subscription.
+> **Chat with 300+ models. Build agents that write their own operating manuals. Research, generate code, run it all — on your keys, on your infrastructure.** When you send a message, the request goes from your browser through ENZO to the provider you picked, and you pay that provider their normal price. **Nothing sits in between taking a cut.** There is no ENZO account, no usage meter, no subscription.
 
 ## What's inside
 
