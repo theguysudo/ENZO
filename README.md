@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/encoreshao/github-trending/tree/main/docs/topics/llm/2026/09" target="_blank">
-    <img src="docs/assets/trending-laurel.svg" alt="GitHub Trending — LLM topic, #17 on Sep 9 → #19 on Sep 10 (evidence in the linked per-topic archive)" width="360">
+    <img src="docs/assets/trending-laurel.svg" alt="GitHub Trending — LLM topic, #17 on Sep 9 → #19 on Sep 10 (evidence in the linked per-topic archive)" width="420">
   </a>
 </p>
 

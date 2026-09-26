@@ -1,33 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="360" height="92" viewBox="0 0 360 92" role="img" aria-label="GitHub Trending — LLM topic, #17 on Sep 9, #19 on Sep 10">
-  <rect x="0.75" y="0.75" width="358.5" height="90.5" rx="15" fill="#F8F5FC" stroke="#DDD1EB" stroke-width="1.5"/>
-  <rect x="73" y="8" width="214" height="76" rx="12" fill="#FFFFFF"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="108" viewBox="0 0 420 108" role="img" aria-label="GitHub Trending — LLM topic, #17 on Sep 9, #19 on Sep 10">
+  <rect x="0.75" y="0.75" width="418.5" height="106.5" rx="17" fill="#F5F0FA" stroke="#D4C3E7" stroke-width="1.5"/>
+  <rect x="75" y="7" width="270" height="94" rx="14" fill="#FFFFFF"/>
 
-  <circle cx="35" cy="46" r="27" fill="#EEE6F7"/>
-  <circle cx="325" cy="46" r="27" fill="#EEE6F7"/>
+  <circle cx="38" cy="54" r="31" fill="#EDE3F7"/>
+  <circle cx="382" cy="54" r="31" fill="#EDE3F7"/>
 
   <g fill="none" stroke="#68419A" stroke-linecap="round" stroke-width="1.7">
-    <path d="M48 73C29 61 22 41 29 20"/>
+    <path d="M50 83C28 68 21 44 29 22"/>
   </g>
   <g fill="#68419A">
-    <ellipse cx="41" cy="68" rx="2.8" ry="6" transform="rotate(-54 41 68)"/>
-    <ellipse cx="32" cy="61" rx="2.8" ry="6" transform="rotate(-48 32 61)"/>
-    <ellipse cx="26" cy="51" rx="2.8" ry="6" transform="rotate(-32 26 51)"/>
-    <ellipse cx="23" cy="40" rx="2.8" ry="6" transform="rotate(-12 23 40)"/>
-    <ellipse cx="24" cy="29" rx="2.8" ry="6" transform="rotate(15 24 29)"/>
+    <ellipse cx="43" cy="77" rx="3.2" ry="7" transform="rotate(-54 43 77)"/>
+    <ellipse cx="33" cy="68" rx="3.2" ry="7" transform="rotate(-48 33 68)"/>
+    <ellipse cx="27" cy="56" rx="3.2" ry="7" transform="rotate(-32 27 56)"/>
+    <ellipse cx="24" cy="43" rx="3.2" ry="7" transform="rotate(-12 24 43)"/>
+    <ellipse cx="25" cy="30" rx="3.2" ry="7" transform="rotate(15 25 30)"/>
   </g>
-  <g transform="translate(360 0) scale(-1 1)">
-    <path d="M48 73C29 61 22 41 29 20" fill="none" stroke="#68419A" stroke-linecap="round" stroke-width="1.7"/>
+  <g transform="translate(420 0) scale(-1 1)">
+    <path d="M50 83C28 68 21 44 29 22" fill="none" stroke="#68419A" stroke-linecap="round" stroke-width="1.7"/>
     <g fill="#68419A">
-      <ellipse cx="41" cy="68" rx="2.8" ry="6" transform="rotate(-54 41 68)"/>
-      <ellipse cx="32" cy="61" rx="2.8" ry="6" transform="rotate(-48 32 61)"/>
-      <ellipse cx="26" cy="51" rx="2.8" ry="6" transform="rotate(-32 26 51)"/>
-      <ellipse cx="23" cy="40" rx="2.8" ry="6" transform="rotate(-12 23 40)"/>
-      <ellipse cx="24" cy="29" rx="2.8" ry="6" transform="rotate(15 24 29)"/>
+      <ellipse cx="43" cy="77" rx="3.2" ry="7" transform="rotate(-54 43 77)"/>
+      <ellipse cx="33" cy="68" rx="3.2" ry="7" transform="rotate(-48 33 68)"/>
+      <ellipse cx="27" cy="56" rx="3.2" ry="7" transform="rotate(-32 27 56)"/>
+      <ellipse cx="24" cy="43" rx="3.2" ry="7" transform="rotate(-12 24 43)"/>
+      <ellipse cx="25" cy="30" rx="3.2" ry="7" transform="rotate(15 25 30)"/>
     </g>
   </g>
 
-  <text x="180" y="26" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="9" font-weight="700" letter-spacing="1.7" fill="#7049A6">GITHUB TRENDING</text>
-  <text x="180" y="56" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#321B4C">#17 → #19</text>
-  <rect x="137" y="65" width="86" height="17" rx="8.5" fill="#F1EAF8"/>
-  <text x="180" y="77" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="9" font-weight="700" letter-spacing="0.6" fill="#68419A">LLM TOPIC</text>
+  <text x="210" y="29" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="700" letter-spacing="1.1" fill="#7049A6">GITHUB TRENDING</text>
+  <text x="210" y="66" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="700" fill="#321B4C">#17 → #19</text>
+  <rect x="156" y="76" width="108" height="21" rx="10.5" fill="#F1EAF8"/>
+  <text x="210" y="91" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="11" font-weight="700" letter-spacing="0.7" fill="#68419A">LLM TOPIC</text>
 </svg>
