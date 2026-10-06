@@ -23,7 +23,13 @@ import json
 import subprocess
 import sys
 
-audit = subprocess.run(["npm", "audit", "--json"], capture_output=True, text=True)
+# The audit runs through a pinned npm 11: npm 10 (Node 20's bundled npm)
+# mis-resolves transitive chains — it reports `fixAvailable: true` for
+# fast-glob when the only real fix is the breaking tailwindcss@4 bump that
+# npm 11 correctly reports as isSemVerMajor. Pinning makes the gate's
+# verdict identical on every runner.
+audit = subprocess.run(["npx", "-y", "npm@11", "audit", "--json"],
+                       capture_output=True, text=True)
 try:
     data = json.loads(audit.stdout)
 except json.JSONDecodeError:
