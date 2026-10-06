@@ -241,14 +241,14 @@ jobs:
         run: npm ci
 
       - name: Audit backend dependencies (high+)
-        run: npm audit --audit-level=high
+        run: python3 scripts/audit-gate.py
 
       - name: Install frontend dependencies
         run: npm ci
         working-directory: synthetic-nature
 
       - name: Audit frontend dependencies (high+)
-        run: npm audit --audit-level=high
+        run: python3 ../scripts/audit-gate.py
         working-directory: synthetic-nature
 
   # ── STAGE 2c: Black-box security pentest ──────────────────────────────────
