@@ -32,7 +32,6 @@
     "express": "^5.2.1",
     "googleapis": "^174.0.1",
     "groq-sdk": "^1.2.1",
-    "http-proxy-middleware": "^3.0.7",
     "jsonwebtoken": "^9.0.3",
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
