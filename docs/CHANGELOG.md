@@ -1,5 +1,25 @@
 # ENZO Project Changelog
 
+## [2026-10-07] — traffic badges fixed: true all-time totals + a docker pulls badge
+
+All uncommitted (awaiting review). The render script run-verified locally against the live traffic API and the public package page.
+
+### What was broken / missing
+
+1. **The "total views" / "total clones" badges showed wrong data.** The render script wrote GitHub's rolling 14-day window straight into a badge labeled "total" — as the window slid past the launch spike, the badge visibly DROPPED (total views 2407 on Sep 26 → 593 a week later) while claiming to be a total.
+2. **No docker pulls badge**, even though the image is on ghcr and the Packages REST API needs a `read:packages` scope the workflow token doesn't carry.
+
+### The fix
+
+- **Persistent per-day history** (`traffic/history.json`): every run merges the fetched 14-day per-day arrays into it (max per field, so a downward revision never erases a recorded day) and days never fall out of the record when the window slides past them. Seeded with 44 days reconstructed from every TRAFFIC.md snapshot in git history (Aug 23 → Oct 5) — nothing that was ever recorded is lost.
+- **"total views" / "total clones" now show the true all-time sums** of that record (3063 views / 1841 clones as of the fix — vs the 593 the badge was showing). The all-time row also landed in TRAFFIC.md's snapshot table.
+- **Unique badges relabeled honestly**: uniques dedupe across days, so a sum of daily uniques would overcount — they stay windowed and the badges now say "unique visitors (14d)" / "unique cloners (14d)".
+- **Docker pulls badge** (`traffic/docker-pulls.json`): the render script scrapes the public package page's "Total downloads" (no token needed — verified 132 pulls), and the badge joined the README badge row linking to the package page. A failed scrape keeps the previous count (never a fake 0).
+
+### Verified
+
+- Script run locally with real data: total views 3063, unique visitors (14d) 347, total clones 1841, unique cloners (14d) 250, stars 111, docker pulls 132; TRAFFIC.md rebuilt with the all-time row + the docker pulls line.
+
 ## [2026-09-25] — coding mode: auto-shift from any mode, resume your earlier builds, preview-only launch
 
 All uncommitted (awaiting review). Backend tsc + frontend tsc + vite build green; auto-shift live-verified; the dom-refs check unit-tested (4 cases).

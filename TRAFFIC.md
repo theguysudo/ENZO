@@ -1,6 +1,6 @@
 # Traffic
 
-> Visitor and clone statistics, snapshotted automatically every week by
+> Visitor and clone statistics, snapshotted automatically every hour by
 > GitHub Actions. GitHub's API only retains 14 days of detail — this
 > page is the permanent record. Raw numbers live in [`traffic/`](traffic/).
 
@@ -8,9 +8,17 @@
 
 **Week 2026-W41** (updated 2026-10-06)
 
-| Last 14 days | Views | Unique visitors | Clones | Unique cloners | Stars |
+| Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
-| totals | 593 | 347 | 1142 | 250 | 111 |
+| last 14 days | 593 | 347 | 1142 | 250 | 111 |
+| all time | 3063 | — | 1841 | — | 111 |
+
+Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **132**
+
+All-time totals are the sum of the persistent per-day record in
+[`traffic/history.json`](traffic/history.json) — days stay in the record
+after GitHub's 14-day window slides past them. Unique counts are windowed
+(a sum of daily uniques would overcount repeat visitors).
 
 | Day | Views | Unique | Clones | Unique |
 |---|---|---|---|---|
