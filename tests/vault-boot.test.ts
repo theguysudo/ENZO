@@ -83,6 +83,41 @@ async function main() {
   assert.strictEqual((fresh as any).serverHoldsNoProviderKeys(), false, 'still holding the env-set key');
   assert.strictEqual(process.env.OPENROUTER_API_KEY, 'sk-or-v1-real-env-wins-over-store', 'real env must not be clobbered by the store');
 
+  // 4b. Custom-endpoint configuration (issue #14) is NOT a provider key: an
+  //     operator who configured only their own endpoint (e.g. a keyless local
+  //     Ollama — base URL + model list, no key) must keep the first-key claim
+  //     window open. Regression for the NON_PROVIDER_ENV_VARS additions.
+  const savedCustomEnv = {
+    key: process.env.CUSTOM_API_KEY,
+    baseUrl: process.env.CUSTOM_API_BASE_URL,
+    models: process.env.CUSTOM_MODELS,
+    moderated: process.env.CUSTOM_MODERATED,
+  };
+  try {
+    delete process.env.OPENROUTER_API_KEY; // clear the key from 4 above
+    delete process.env.CUSTOM_API_KEY;
+    process.env.CUSTOM_API_BASE_URL = 'http://localhost:11434/v1';
+    process.env.CUSTOM_MODELS = 'llama3.1,qwen2.5-coder';
+    process.env.CUSTOM_MODERATED = 'false';
+    assert.strictEqual(
+      (fresh as any).serverHoldsNoProviderKeys(),
+      true,
+      'custom-endpoint configuration alone must keep the instance claimable',
+    );
+    process.env.CUSTOM_API_KEY = 'test-custom-key-not-a-claim';
+    assert.strictEqual(
+      (fresh as any).serverHoldsNoProviderKeys(),
+      false,
+      'a configured CUSTOM_API_KEY IS a provider key and gates the claim',
+    );
+  } finally {
+    process.env.OPENROUTER_API_KEY = 'sk-or-v1-real-env-wins-over-store';
+    if (savedCustomEnv.key === undefined) delete process.env.CUSTOM_API_KEY; else process.env.CUSTOM_API_KEY = savedCustomEnv.key;
+    if (savedCustomEnv.baseUrl === undefined) delete process.env.CUSTOM_API_BASE_URL; else process.env.CUSTOM_API_BASE_URL = savedCustomEnv.baseUrl;
+    if (savedCustomEnv.models === undefined) delete process.env.CUSTOM_MODELS; else process.env.CUSTOM_MODELS = savedCustomEnv.models;
+    if (savedCustomEnv.moderated === undefined) delete process.env.CUSTOM_MODERATED; else process.env.CUSTOM_MODERATED = savedCustomEnv.moderated;
+  }
+
   // 5. Token formulas: groq-bound vs instance.
   const w = Math.floor(1786000000000 / (12 * 60 * 60 * 1000));
   const groqTok = deriveVaultToken('master', 'groq-key', w);

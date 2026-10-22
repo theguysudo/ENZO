@@ -16,6 +16,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 import { readModelCache, syncModels, tryReadNvidiaKey } from '../models/model-sync.js';
 import { buildMemoryContext } from '../core/memory.js';
+import { isSelfHostedInstance } from '../core/vault-boot.js';
 import { buildSkillContext } from '../skills/skills.js';
 import { getModelHealth } from '../models/health.js';
 
@@ -56,6 +57,8 @@ export function getProviderKey(provider: string): string {
       return process.env.PUTER_AUTH_TOKEN || '';
     case 'cloudflare':
       return process.env.CLOUDFLARE_API_TOKEN || '';
+    case 'custom':
+      return process.env.CUSTOM_API_KEY || '';
     default:
       return '';
   }
@@ -72,6 +75,7 @@ const PROVIDER_ENDPOINTS = {
   google: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', // Google Gemini (OpenAI-compat)
   puter: 'https://api.puter.com/puterai/openai/v1/chat/completions', // Puter user-pays gateway
   cloudflare: 'https://api.cloudflare.com/client/v4', // Cloudflare Workers AI (base — chat endpoint built from account id)
+  custom: '', // no built-in endpoint — operator-configured base URL (see customEndpoint)
 } as const;
 
 // Runtime-settable base URL for LLM7 (env LLM7_API_BASE_URL). Stored beside the
@@ -88,6 +92,19 @@ function cloudflareChatEndpoint(): string {
   const account = process.env.CLOUDFLARE_ACCOUNT_ID || '';
   if (!account) return '';
   return `https://api.cloudflare.com/client/v4/accounts/${account}/ai/v1/chat/completions`;
+}
+
+// The custom source (issue #14) has no built-in endpoint: the base URL is the
+// operator's CUSTOM_API_BASE_URL. The client-supplied x-custom-base-url
+// override is honored ONLY on self-hosted instances (see parseModelRoute) —
+// on a shared/hosted instance the server must not become a relay to
+// visitor-chosen URLs. Returns '' when unconfigured — parseModelRoute turns
+// that into a clear 400.
+function customEndpoint(): string {
+  const base = String(process.env.CUSTOM_API_BASE_URL || '')
+    .trim()
+    .replace(/\/+$/, '');
+  return base ? `${base}/chat/completions` : '';
 }
 
 type Provider = keyof typeof PROVIDER_ENDPOINTS;
@@ -161,6 +178,7 @@ function parseModelRoute(modelString: string, req: Request): ParsedRoute {
     { prefix: 'google/', provider: 'google' }, // Google Gemini (OpenAI-compat)
     { prefix: 'puter/', provider: 'puter' }, // Puter user-pays gateway
     { prefix: 'cloudflare/', provider: 'cloudflare' }, // Cloudflare Workers AI
+    { prefix: 'custom/', provider: 'custom' }, // Generic OpenAI-compatible endpoint (operator-configured)
   ];
 
   for (const { prefix, provider } of prefixes) {
@@ -214,6 +232,26 @@ function parseModelRoute(modelString: string, req: Request): ParsedRoute {
           accountOverride || process.env.CLOUDFLARE_ACCOUNT_ID
             ? `https://api.cloudflare.com/client/v4/accounts/${accountOverride || process.env.CLOUDFLARE_ACCOUNT_ID}/ai/v1/chat/completions`
             : cloudflareChatEndpoint();
+      } else if (provider === 'custom') {
+        // A client-supplied destination must NEVER inherit server credentials:
+        // if the base URL comes from the request, only the request's own key
+        // rides along (empty when absent). Header overrides are also limited
+        // to self-hosted instances — on a shared/hosted deployment the server
+        // must not relay to visitor-chosen URLs at all.
+        const headerBase = String(req.headers['x-custom-base-url'] || '').trim();
+        if (headerBase && isSelfHostedInstance()) {
+          endpoint = `${headerBase.replace(/\/+$/, '')}/chat/completions`;
+          apiKey = String(req.headers['x-custom-key'] || '');
+        } else {
+          endpoint = customEndpoint();
+          if (!endpoint) {
+            throw new RouteError(
+              headerBase && !isSelfHostedInstance()
+                ? 'Custom endpoints are operator-configured on this instance'
+                : 'Custom endpoint not configured — set CUSTOM_API_BASE_URL',
+            );
+          }
+        }
       }
 
       return {
@@ -784,6 +822,7 @@ tunnelRouter.get('/models', async (req: Request, res: Response) => {
           providedKeys.puter || '',
           providedKeys.cloudflare || '',
           providedKeys.cloudflareAccount || '',
+          undefined,
         );
         models = [...fresh.models];
         cache.updatedAt = fresh.updatedAt;

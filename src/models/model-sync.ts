@@ -10,6 +10,9 @@
  *   - Google   (Gemini via AI Studio OpenAI-compat endpoint, requires key)
  *   - Puter    (user-pays gateway: GPT/Claude/Gemini/Grok/Qwen, keyless catalog)
  *   - Cloudflare (Workers AI, requires token + auto-derived account id)
+ *   - Custom   (any user-configured OpenAI-compatible endpoint — local
+ *               runtimes like Ollama / LM Studio or third-party gateways;
+ *               skipped entirely until a base URL is configured)
  *
  * Normalizes all into CatalogModel[], writes to model-cache.json.
  * Refreshes every 6 hours automatically.
@@ -30,7 +33,7 @@
  * ponytail: whole-file cache rewritten on every sync, 6-hour fixed interval, no
  * per-provider backoff. One of the two modules allowed to writeFileSync (the
  * other is env-manager). If a provider starts rate-limiting the sync, give that
- * one its own interval rather than slowing all nine.
+ * one its own interval rather than slowing all ten.
  */
 
 import fs from 'fs';
@@ -87,7 +90,7 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
 export interface CatalogModel {
   id: string;           // tunnel prefix + provider id, e.g. "openrouter/qwen/qwen3-32b"
   name: string;
-  provider: 'OpenRouter' | 'Groq' | 'Pollinations' | 'HuggingFace' | 'NVIDIA' | 'LLM7' | 'Puter' | 'Google' | 'Cloudflare';
+  provider: 'OpenRouter' | 'Groq' | 'Pollinations' | 'HuggingFace' | 'NVIDIA' | 'LLM7' | 'Puter' | 'Google' | 'Cloudflare' | 'Custom';
   type: 'text' | 'image' | 'multimodal' | 'image-gen';
   free: boolean;
   context_length: number;
@@ -1331,6 +1334,120 @@ async function fetchCloudflareModels(cfToken?: string, cfAccount?: string): Prom
   return out;
 }
 
+
+// ─── Source: Custom (user-configured OpenAI-compatible endpoint) ─────────────
+// The generic source from #14: the operator points ENZO at ANY endpoint that
+// speaks the OpenAI API — a local runtime (Ollama, LM Studio, vLLM, llama.cpp
+// server), a LiteLLM proxy, or a third-party gateway. No vendor-specific code
+// paths and no bundled endpoints: nothing is fetched until a base URL is
+// configured, and the source skips silently while unconfigured so the
+// zero-key boot contract holds.
+
+export interface CustomEndpointConfig {
+  baseUrl?: string;    // e.g. http://localhost:11434/v1 — the gate: unset = source off
+  apiKey?: string;     // optional; local runtimes usually have none
+  models?: string;     // comma-separated allowlist; doubles as the manual-add
+                       // fallback when the endpoint exposes no /models list
+  moderated?: boolean; // the operator's call on their own endpoint's posture
+}
+
+/** Read the custom-endpoint config from process.env (vault-persisted via env-manager). */
+export function readCustomEndpointConfig(): CustomEndpointConfig {
+  return {
+    baseUrl: process.env.CUSTOM_API_BASE_URL || '',
+    apiKey: process.env.CUSTOM_API_KEY || '',
+    models: process.env.CUSTOM_MODELS || '',
+    // Catalog-wide default is moderated; the operator declares their own
+    // endpoint unmoderated with CUSTOM_MODERATED=false.
+    moderated: (process.env.CUSTOM_MODERATED || '').trim().toLowerCase() !== 'false',
+  };
+}
+
+/** Parse the comma-separated allowlist / manual model list. Exported for tests. */
+export function parseCustomModelList(raw?: string): string[] {
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(',')) {
+    const id = part.trim();
+    if (id && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+async function fetchCustomModels(config: CustomEndpointConfig): Promise<CatalogModel[]> {
+  const base = (config.baseUrl || '').trim().replace(/\/+$/, '');
+  if (!base) return []; // unconfigured — skip, like every keyed source with no key
+
+  const allowlist = parseCustomModelList(config.models);
+  const moderated = config.moderated !== false;
+  const now = new Date().toISOString();
+
+  interface RemoteModel { id: string; created?: number; ctx: number }
+  let remote: RemoteModel[] | null = null;
+  let fetchErr: unknown = null;
+  try {
+    const headers: Record<string, string> = { 'User-Agent': 'ENZO-AI-Tunnel/1.0', Accept: 'application/json' };
+    const key = (config.apiKey || '').trim();
+    if (key) headers.Authorization = `Bearer ${key}`;
+    const res = await withRetry(() => fetchWithTimeout(`${base}/models`, { headers }));
+    if (!res.ok) throw new HttpStatusError(res.status, `Custom endpoint fetch failed: ${res.status}`);
+    const payload = (await res.json()) as { data?: unknown };
+    if (!payload || typeof payload !== 'object' || !Array.isArray((payload as any).data)) {
+      throw new Error('Custom endpoint response missing data[] array');
+    }
+    remote = [];
+    for (const raw of (payload as any).data as unknown[]) {
+      if (!raw || typeof raw !== 'object') continue;
+      const m = raw as { id?: unknown; created?: unknown; context_length?: unknown; context_window?: unknown };
+      const id = typeof m.id === 'string' ? m.id.trim() : '';
+      if (!id) continue;
+      remote.push({
+        id,
+        created: typeof m.created === 'number' ? m.created : undefined,
+        ctx: Number(m.context_length) || Number(m.context_window) || 0,
+      });
+    }
+  } catch (err) {
+    fetchErr = err;
+  }
+
+  // The allowlist filters the live list when both exist; when the endpoint
+  // exposes no /models (or is unreachable) it becomes the manual-add fallback.
+  let entries: RemoteModel[];
+  if (remote && remote.length > 0) {
+    entries = allowlist.length > 0 ? remote.filter((m) => allowlist.includes(m.id)) : remote;
+  } else if (allowlist.length > 0) {
+    entries = allowlist.map((id) => ({ id, ctx: 0 }));
+  } else if (fetchErr) {
+    throw fetchErr; // configured but broken, no fallback — sync retains previous
+  } else {
+    entries = []; // endpoint answered with an empty catalog
+  }
+
+  return entries.map((m) => {
+    const addedDate = m.created ? new Date(m.created * 1000).toISOString() : now;
+    const desc = 'Model served by your custom OpenAI-compatible endpoint.';
+    return {
+      id: `custom/${m.id}`,
+      name: m.id,
+      provider: 'Custom' as const,
+      type: 'text' as CatalogModel['type'],
+      free: false, // the operator's endpoint sets its own pricing — ENZO doesn't know it
+      context_length: m.ctx,
+      description: desc,
+      tags: inferTags(m.id, m.id, desc, 'text', moderated, addedDate),
+      moderated,
+      pricing_prompt: 'Set by your endpoint',
+      added_date: addedDate,
+      max_output: 0,
+    };
+  });
+}
+
 // ─── Main Sync Function ───────────────────────────────────────────────────────
 
 async function syncModels(
@@ -1342,7 +1459,8 @@ async function syncModels(
   puterKey?: string,
   cloudflareToken?: string,
   cloudflareAccount?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  customConfig?: CustomEndpointConfig
 ): Promise<ModelCache> {
   console.log('[model-sync] Starting model catalog refresh...');
 
@@ -1355,7 +1473,16 @@ async function syncModels(
   // before calling; here we just make sure we ALWAYS write before returning, even
   // when some providers failed (the previousModels fallback already protects us).
 
-  const [orResult, groqResult, pollResult, hfResult, nvidiaResult, llm7Result, googleResult, puterResult, cloudflareResult] = await Promise.allSettled([
+  // Custom endpoint config: caller-supplied fields win, env fills the rest.
+  const envCustom = readCustomEndpointConfig();
+  const customCfg: CustomEndpointConfig = {
+    baseUrl: customConfig?.baseUrl ?? envCustom.baseUrl,
+    apiKey: customConfig?.apiKey ?? envCustom.apiKey,
+    models: customConfig?.models ?? envCustom.models,
+    moderated: customConfig?.moderated ?? envCustom.moderated,
+  };
+
+  const [orResult, groqResult, pollResult, hfResult, nvidiaResult, llm7Result, googleResult, puterResult, cloudflareResult, customResult] = await Promise.allSettled([
     fetchOpenRouterModels(),
     fetchGroqModels(groqKey),
     fetchPollinationsModels(),
@@ -1365,6 +1492,7 @@ async function syncModels(
     fetchGoogleModels(googleKey), // Google Gemini via AI Studio (keyed)
     fetchPuterModels(), // Puter user-pays gateway (keyless catalog)
     fetchCloudflareModels(cloudflareToken, cloudflareAccount), // Cloudflare Workers AI (keyed)
+    fetchCustomModels(customCfg), // Custom OpenAI-compatible endpoint (operator-configured; skips when unset)
   ]);
 
   // A transient provider outage must NOT wipe that provider from the catalog.
@@ -1400,6 +1528,7 @@ async function syncModels(
   const google = any(googleResult) ? ok(googleResult) : (console.error('[model-sync] Google failed — retaining previous:', (googleResult as PromiseRejectedResult).reason), previousByProvider('google'));
   const puter = any(puterResult) ? ok(puterResult) : (console.error('[model-sync] Puter failed — retaining previous:', (puterResult as PromiseRejectedResult).reason), previousByProvider('puter'));
   const cloudflare = any(cloudflareResult) ? ok(cloudflareResult) : (console.error('[model-sync] Cloudflare failed — retaining previous:', (cloudflareResult as PromiseRejectedResult).reason), previousByProvider('cloudflare'));
+  const custom = any(customResult) ? ok(customResult) : (console.error('[model-sync] Custom failed — retaining previous:', (customResult as PromiseRejectedResult).reason), previousByProvider('custom'));
 
   // Verify LLM7 identity BEFORE merging: the gateway accepts any requested id
   // but silently serves a rotating shared model for undeployed ids. Free chat
@@ -1416,7 +1545,7 @@ async function syncModels(
   // Deduplicate by id
   const seen = new Set<string>();
   const models: CatalogModel[] = [];
-  for (const m of [...or, ...groq, ...poll, ...hf, ...nvidia, ...llm7, ...google, ...puter, ...cloudflare]) {
+  for (const m of [...or, ...groq, ...poll, ...hf, ...nvidia, ...llm7, ...google, ...puter, ...cloudflare, ...custom]) {
     if (!seen.has(m.id)) {
       seen.add(m.id);
       models.push(m);
@@ -1511,7 +1640,7 @@ async function syncModels(
   // At least one provider must have returned real data to trust this snapshot.
   const anySucceeded =
     models.length > 0 &&
-    [orResult, groqResult, pollResult, hfResult, nvidiaResult, llm7Result, googleResult, puterResult, cloudflareResult].some(
+    [orResult, groqResult, pollResult, hfResult, nvidiaResult, llm7Result, googleResult, puterResult, cloudflareResult, customResult].some(
       (r) => r.status === 'fulfilled' && r.value.length > 0
     );
 
@@ -2450,9 +2579,9 @@ async function fetchNvidiaModels(nvidiaKey?: string): Promise<CatalogModel[]> {
 
 // ─── Startup + Auto-Refresh ───────────────────────────────────────────────────
 
-export function startModelSync(groqKey: string, hfToken?: string, nvidiaKey?: string, llm7Key?: string, googleKey?: string, puterKey?: string, cloudflareToken?: string, cloudflareAccount?: string): void {
+export function startModelSync(groqKey: string, hfToken?: string, nvidiaKey?: string, llm7Key?: string, googleKey?: string, puterKey?: string, cloudflareToken?: string, cloudflareAccount?: string, customConfig?: CustomEndpointConfig): void {
   // Run immediately on startup
-  syncModels(groqKey, hfToken, nvidiaKey, llm7Key, googleKey, puterKey, cloudflareToken, cloudflareAccount).catch((err) =>
+  syncModels(groqKey, hfToken, nvidiaKey, llm7Key, googleKey, puterKey, cloudflareToken, cloudflareAccount, undefined, customConfig).catch((err) =>
     console.error('[model-sync] Startup sync failed:', err)
   );
 
@@ -2466,7 +2595,8 @@ export function startModelSync(groqKey: string, hfToken?: string, nvidiaKey?: st
     const currentPuter = process.env.PUTER_AUTH_TOKEN || puterKey;
     const currentCloudflare = process.env.CLOUDFLARE_API_TOKEN || cloudflareToken;
     const currentCloudflareAccount = process.env.CLOUDFLARE_ACCOUNT_ID || cloudflareAccount;
-    syncModels(currentGroq, currentHf, currentNvidia, currentLlm7, currentGoogle, currentPuter, currentCloudflare, currentCloudflareAccount).catch((err) =>
+    const currentCustom = readCustomEndpointConfig();
+    syncModels(currentGroq, currentHf, currentNvidia, currentLlm7, currentGoogle, currentPuter, currentCloudflare, currentCloudflareAccount, undefined, currentCustom).catch((err) =>
       console.error('[model-sync] Scheduled sync failed:', err)
     );
   }, SYNC_INTERVAL_MS);
