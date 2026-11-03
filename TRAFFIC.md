@@ -6,12 +6,12 @@
 
 ## Latest snapshot
 
-**Week 2026-W45** (updated 2026-11-02)
+**Week 2026-W45** (updated 2026-11-03)
 
 | Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
-| last 14 days | 168 | 72 | 551 | 170 | 116 |
-| all time | 3490 | — | 3030 | — | 116 |
+| last 14 days | 168 | 72 | 551 | 170 | 117 |
+| all time | 3490 | — | 3030 | — | 117 |
 
 Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **163**
 
