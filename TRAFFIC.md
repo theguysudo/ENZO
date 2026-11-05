@@ -13,7 +13,7 @@
 | last 14 days | 197 | 83 | 517 | 166 | 117 |
 | all time | 3539 | — | 3122 | — | 117 |
 
-Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **163**
+Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **169**
 
 All-time totals are the sum of the persistent per-day record in
 [`traffic/history.json`](traffic/history.json) — days stay in the record
