@@ -6,14 +6,14 @@
 
 ## Latest snapshot
 
-**Week 2026-W45** (updated 2026-11-07)
+**Week 2026-W45** (updated 2026-11-08)
 
 | Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
 | last 14 days | 201 | 84 | 521 | 188 | 117 |
 | all time | 3554 | — | 3206 | — | 117 |
 
-Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **170**
+Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **172**
 
 All-time totals are the sum of the persistent per-day record in
 [`traffic/history.json`](traffic/history.json) — days stay in the record
