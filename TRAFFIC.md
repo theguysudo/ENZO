@@ -6,7 +6,7 @@
 
 ## Latest snapshot
 
-**Week 2026-W45** (updated 2026-11-08)
+**Week 2026-W46** (updated 2026-11-09)
 
 | Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
