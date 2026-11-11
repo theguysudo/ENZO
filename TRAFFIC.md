@@ -10,10 +10,10 @@
 
 | Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
-| last 14 days | 162 | 74 | 477 | 190 | 119 |
-| all time | 3584 | — | 3352 | — | 119 |
+| last 14 days | 162 | 74 | 477 | 190 | 120 |
+| all time | 3584 | — | 3352 | — | 120 |
 
-Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **178**
+Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **180**
 
 All-time totals are the sum of the persistent per-day record in
 [`traffic/history.json`](traffic/history.json) — days stay in the record
