@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/enzo-summit-banner.svg" alt="ENZO — a snowy summit standing above a sea of clouds at sunrise, a rope of climbers on the ridge, the wordmark written into the dawn sky" width="960" style="max-width: 100%; height: auto;">
+</p>
+
 # ENZO 
 
 <p align="center">
@@ -70,7 +74,7 @@ docker compose up -d
 # → http://localhost:5001
 ```
 
-ENZO is MIT-licensed and free forever. If it saves you time, [a star](https://github.com/theguysudo/ENZO/stargazers) genuinely helps other builders find it.
+ENZO is Apache-2.0-licensed and free forever. If it saves you time, [a star](https://github.com/theguysudo/ENZO/stargazers) genuinely helps other builders find it.
 
 No clone? One command (mounts the same named volumes, so your data and the claimed instance survive restarts and upgrades):
 
