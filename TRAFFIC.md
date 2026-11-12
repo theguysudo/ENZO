@@ -10,8 +10,8 @@
 
 | Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
-| last 14 days | 162 | 74 | 477 | 190 | 120 |
-| all time | 3584 | — | 3352 | — | 120 |
+| last 14 days | 166 | 79 | 468 | 191 | 120 |
+| all time | 3605 | — | 3377 | — | 120 |
 
 Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **186**
 
@@ -22,6 +22,7 @@ after GitHub's 14-day window slides past them. Unique counts are windowed
 
 | Day | Views | Unique | Clones | Unique |
 |---|---|---|---|---|
+| 2026-11-11 | 21 | 15 | 25 | 15 |
 | 2026-11-10 | 12 | 10 | 13 | 8 |
 | 2026-11-09 | 5 | 5 | 55 | 30 |
 | 2026-11-08 | 5 | 3 | 36 | 23 |
@@ -35,15 +36,15 @@ after GitHub's 14-day window slides past them. Unique counts are windowed
 | 2026-10-31 | 12 | 8 | 20 | 9 |
 | 2026-10-30 | 13 | 7 | 36 | 13 |
 | 2026-10-29 | 10 | 8 | 37 | 19 |
-| 2026-10-28 | 17 | 12 | 34 | 16 |
 
 ### Top referrers (last 14 days)
 
 | Source | Views | Unique |
 |---|---|---|
-| github.com | 32 | 29 |
-| felladrin-awesome-ai-web-search.static.hf.space | 7 | 7 |
+| github.com | 29 | 27 |
+| felladrin-awesome-ai-web-search.static.hf.space | 8 | 8 |
 | Google | 3 | 3 |
+| producthunt.com | 2 | 2 |
 | Bing | 1 | 1 |
 | DuckDuckGo | 1 | 1 |
 | i.pixcat.cn | 1 | 1 |
