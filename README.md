@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/enzo-summit-banner.svg" alt="ENZO — a snowy summit standing above a sea of clouds at sunrise, a rope of climbers on the ridge, the wordmark written into the dawn sky" width="960" style="max-width: 100%; height: auto;">
+  <img src="docs/assets/enzo-summit-banner.gif" alt="ENZO — a snowy summit standing above a sea of clouds at sunrise, a rope of climbers on the ridge, the wordmark written into the dawn sky" width="960" style="max-width: 100%; height: auto;">
 </p>
 
 # ENZO 
