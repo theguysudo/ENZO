@@ -65,6 +65,11 @@ src/skills/skills/
 # anchoring rule as /skills/ above: unanchored `agents/` would also ignore
 # src/agents/*.ts in fresh clones and break git add + tsc.
 src/agents/agents/
+# ENZO Intelligence investigations — collected evidence + run history are
+# per-install user data (volume-mounted in docker), never committed.
+src/intelligence/data/
+# Neural Engine per-owner profiles/graphs/events — same per-install policy.
+src/neural-engine/data/
 
 # Generated multi-file projects (written to disk by coding mode) — local
 generated-projects/
@@ -137,3 +142,24 @@ config/.env.example
 
 # docker repo: dist is built inside the image, never committed
 synthetic-nature/dist
+
+# desktop build artifacts
+desktop/dist/
+desktop/windows/staged/
+
+# Local media scratch — source copies and scraped artwork that the product
+# does not read at runtime:
+#   * Subway_…gwr_video_mvp.mp4 — the raw 15MB source clip at the repo root;
+#     the shipped loops live in synthetic-nature/public/background_elements/.
+#   * modelcover/ — a local scrape of provider cover art. The marketplace
+#     fetches each platform's own art at runtime, so this copy is redundant.
+#   * promo.png — an old promo export; the app icon is
+#     desktop/assets/enzo-icon-1024.png and the website favicons are in
+#     synthetic-nature/public/.
+Subway_*_gwr_video_mvp.mp4
+modelcover/
+promo.png
+
+# tsc emit of vite.config.ts (the tracked source is vite.config.ts)
+synthetic-nature/vite.config.js
+synthetic-nature/vite.config.d.ts

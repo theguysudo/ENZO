@@ -723,24 +723,27 @@ function renderMarkdownText(text: string) {
   })
 }
 
-function renderMessageContent(text: string) {
-  const imgMatch = text.match(/!\[([^\]]*)\]\(([^)]+)\)/)
-  if (imgMatch) {
-    const caption = imgMatch[1] || 'Generated Image'
-    const src = imgMatch[2]
-    return (
-      <div className="mt-1 group relative border border-white/[0.08] rounded-2xl overflow-hidden bg-black/30 shadow-2xl max-w-[380px] select-none">
-        <img src={src} alt={caption} className="w-full h-auto object-cover max-h-[320px] transition-transform duration-700 group-hover:scale-[1.02]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-400 p-4 flex items-end">
-          <div className="flex gap-2">
-            <a href={src} download="enzo.png" className="rounded-full bg-white/90 px-3 py-1.5 text-[10px] font-sans font-semibold text-black hover:bg-white cursor-pointer">Download</a>
-            <button type="button" onClick={() => navigator.clipboard.writeText(src)} className="rounded-full bg-white/10 border border-white/20 px-3 py-1.5 text-[10px] font-sans text-white hover:bg-white/20 cursor-pointer">Copy URI</button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+// The html a reply really carries, or null. The extractor also accepts a
+// "bare document" (a reply that IS the page), and a plain answer that merely
+// mentions a tag ("put the <script> before </body>") used to satisfy that
+// shape check — the terminal then registered the prose as a web page and
+// popped the preview panel open on a chat reply. A fenced ```html block is
+// already vetted by the extractor; a bare document has to carry a doctype or
+// a complete <html>…</html> / <body>…</body> pair.
+function previewableHtml(text: string): string | null {
+  const html = extractPreviewHtml(text)
+  if (!html) return null
+  if (/```(?:html|HTML)\s*\n([\s\S]*?)```/.test(text)) return html
+  const lower = html.toLowerCase()
+  const isDocument =
+    lower.includes('<!doctype html') ||
+    (lower.includes('<html') && lower.includes('</html>')) ||
+    (lower.includes('<body') && lower.includes('</body>'))
+  return isDocument ? html : null
+}
 
+// Render a reply body: markdown text segments + code-block cards.
+function renderSegments(text: string) {
   const segments = parseMessageText(text)
 
   return (
@@ -758,6 +761,38 @@ function renderMessageContent(text: string) {
       })}
     </div>
   )
+}
+
+function renderMessageContent(text: string) {
+  const imgMatch = text.match(/!\[([^\]]*)\]\(([^)]+)\)/)
+  if (imgMatch) {
+    const caption = imgMatch[1] || 'Generated Image'
+    const src = imgMatch[2]
+    // The picture is ONE part of the reply — keep the prose around it. The
+    // image-gen path writes "Here is your synthesized image:" above the
+    // markdown, and a reply that mixes an image with text or code lost
+    // everything but the picture when the image branch returned early.
+    const matchStart = imgMatch.index ?? 0
+    const before = text.slice(0, matchStart)
+    const after = text.slice(matchStart + imgMatch[0].length)
+    return (
+      <div className="space-y-3">
+        {before.trim() ? renderSegments(before) : null}
+        <div className="mt-1 group relative border border-white/[0.08] rounded-2xl overflow-hidden bg-black/30 shadow-2xl max-w-[380px] select-none">
+          <img src={src} alt={caption} className="w-full h-auto object-cover max-h-[320px] transition-transform duration-700 group-hover:scale-[1.02]" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-400 p-4 flex items-end">
+            <div className="flex gap-2">
+              <a href={src} download="enzo.png" className="rounded-full bg-white/90 px-3 py-1.5 text-[10px] font-sans font-semibold text-black hover:bg-white cursor-pointer">Download</a>
+              <button type="button" onClick={() => navigator.clipboard.writeText(src)} className="rounded-full bg-white/10 border border-white/20 px-3 py-1.5 text-[10px] font-sans text-white hover:bg-white/20 cursor-pointer">Copy URI</button>
+            </div>
+          </div>
+        </div>
+        {after.trim() ? renderSegments(after) : null}
+      </div>
+    )
+  }
+
+  return renderSegments(text)
 }
 
 export default function TerminalSection({
@@ -2945,6 +2980,12 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
               setThoughtChain('')
               setResearchSteps([])
               setRetryInfo(null)
+              // Clear the auto-routed mode like the success path does — a
+              // failed turn must not leave the NEXT turn tagged with this
+              // turn's mode (a stale 'coding' tag makes the browser
+              // auto-continue fire on a reply that had no code in it).
+              autoRoutedModeRef.current = null
+              setAutoRoutedMode(null)
               abortRef.current = null
               return
             }
@@ -3106,6 +3147,10 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
         setThoughtChain('')
         setResearchSteps([])
         setRetryInfo(null)
+        // Same reset as the success path — a stopped turn must not leave the
+        // next turn tagged with this turn's auto-routed mode.
+        autoRoutedModeRef.current = null
+        setAutoRoutedMode(null)
         abortRef.current = null
         return
       }
@@ -3120,6 +3165,8 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
         setThoughtChain('')
         setResearchSteps([])
         setRetryInfo(null)
+        autoRoutedModeRef.current = null
+        setAutoRoutedMode(null)
         abortRef.current = null
         return
       }
@@ -3164,6 +3211,10 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
         setThoughtChain('')
         setResearchSteps([])
         setRetryInfo(null)
+        // Same reset as the success path — a failed turn must not leave the
+        // next turn tagged with this turn's auto-routed mode.
+        autoRoutedModeRef.current = null
+        setAutoRoutedMode(null)
         abortRef.current = null
     }
   }
@@ -3337,7 +3388,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
           return
         }
       }
-      const html = extractPreviewHtml(text)
+      const html = previewableHtml(text)
       if (html) await registerPreview(html, force, silent)
     },
     [registerProject, registerPreview],
@@ -4095,7 +4146,7 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
                       {/* Per-message Live Preview — any reply carrying a full HTML
                           page gets a "Preview" affordance that opens it in the
                           side panel (identical to what auto-opens for coding). */}
-                      {m.role === 'assistant' && !isStreaming && extractPreviewHtml(m.text) && (
+                      {m.role === 'assistant' && !isStreaming && previewableHtml(m.text) && (
                         <div className="mt-2.5">
                           <button
                             type="button"
@@ -5704,20 +5755,28 @@ Roast Engine  : ${isRoasting ? 'ACTIVE' : 'DISABLED'}`
               result += decoder.decode(value, { stream: true })
             }
           }
-          // Parse the SSE response to extract the text
+          // Parse the SSE response: the reply arrives as MANY `data:` frames
+          // (one per streamed chunk) — the whole answer is their concatenation.
+          // Returning the FIRST frame replaced the document with a fragment.
+          // Frames that carry an `event:` header (reasoning / search steps)
+          // are metadata and are skipped.
           const lines = result.split('\n\n')
+          let text = ''
           for (const line of lines) {
-            if (line.startsWith('data:')) {
-              const data = line.slice(5).trim()
-              try {
-                const parsed = JSON.parse(data)
-                if (typeof parsed === 'string') return parsed
-              } catch {
-                return data
-              }
+            if (!line.startsWith('data:')) continue
+            const data = line.slice(5).trim()
+            if (!data || data === '[CLOSE]') continue
+            try {
+              const parsed = JSON.parse(data)
+              if (typeof parsed === 'string') text += parsed
+            } catch {
+              text += data
             }
           }
-          return result
+          // A failed turn must not overwrite the user's document with the
+          // error text — surface it as a failure instead.
+          if (text.startsWith('[Server Error:')) throw new Error(text.slice(15, 200))
+          return text || result
         }}
       />
 

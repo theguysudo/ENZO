@@ -340,7 +340,7 @@ async function main() {
   }
 
   // SSRF guard (real guard, no fake): http scheme, private hosts.
-  const { fetchUrlGuarded } = gatherMod as any;
+  const { fetchUrlGuarded, resolvePublicHttpsUrl } = gatherMod as any;
   await assert.rejects(() => fetchUrlGuarded('http://example.com'), /https only/);
   await assert.rejects(() => fetchUrlGuarded('https://localhost/'), /private host/);
   await assert.rejects(() => fetchUrlGuarded('https://127.0.0.1/'), /private/);
@@ -348,7 +348,32 @@ async function main() {
   await assert.rejects(() => fetchUrlGuarded('https://10.0.0.5/'), /private/);
   await assert.rejects(() => fetchUrlGuarded('https://169.254.169.254/latest/meta-data'), /private/, 'cloud metadata endpoint blocked');
   await assert.rejects(() => fetchUrlGuarded('not a url'), /invalid URL/);
-  console.log('✓ gather pipeline + SSRF guard');
+
+  const resolvesTo = (...answers: Array<{ address: string; family: number }>) => async () => answers;
+  await assert.rejects(
+    () => resolvePublicHttpsUrl('https://public-looking.example/', resolvesTo({ address: '169.254.169.254', family: 4 })),
+    /private address/,
+    'DNS aliases to cloud metadata are rejected before fetch',
+  );
+  await assert.rejects(
+    () => resolvePublicHttpsUrl('https://mixed.example/', resolvesTo(
+      { address: '93.184.216.34', family: 4 },
+      { address: '10.0.0.5', family: 4 },
+    )),
+    /private address/,
+    'mixed public/private DNS answers fail closed',
+  );
+  await assert.rejects(
+    () => resolvePublicHttpsUrl('https://ipv6.example/', resolvesTo({ address: 'fd00::1', family: 6 })),
+    /private address/,
+    'IPv6 unique-local addresses are rejected',
+  );
+  const pinned = await resolvePublicHttpsUrl(
+    'https://example.com/reference',
+    resolvesTo({ address: '93.184.216.34', family: 4 }),
+  );
+  assert.strictEqual(pinned.address.address, '93.184.216.34', 'validated public address is pinned for the request');
+  console.log('✓ gather pipeline + DNS-pinned SSRF guard');
 
   // ── 4. Scheduler math ────────────────────────────────────────────────────
   const schedMod = await import('../src/agents/scheduler.js');

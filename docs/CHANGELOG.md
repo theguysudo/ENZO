@@ -1,5 +1,78 @@
 # ENZO Project Changelog
 
+## [2026-11-20] — v1.7.0: ENZO Intelligence, the private Neural Engine, one-click desktop apps with in-app updates, and a security pass over the whole surface
+
+Backend tsc + frontend tsc + vite build green; the full test suite (13 suites, 460 checks) green, including three new suites (`tests/intelligence.test.ts` 66 checks, `tests/neural-engine.test.ts` 66 checks, `tests/desktop-update.test.ts` 30 checks); Intelligence smoke-tested live with real Groq + Exa keys (3 full runs against expressjs/express: 27-claim evidence ledger, quote verification, run diff); the Neural Engine audited end-to-end by an independent agent against the running app and every confirmed defect fixed; a defensive security review produced seven fixes, each with a regression test; the macOS `.dmg` and both Windows `.exe` editions built, mounted and payload-verified; the packaged app running on port 5200 with all of it.
+
+**Desktop installers are attached to this release** — `ENZO-1.7.0-macOS-arm64.dmg` (drag to Applications) and `ENZO-1.7.0-less-theme-setup.exe` / `ENZO-1.7.0-full-theme-setup.exe` (per-user install). No Docker, no clone, no system Node: the bundle carries its own Node runtime, production dependencies and the built frontend. First launch of a downloaded copy needs right-click → Open on macOS (ad-hoc signed, not notarized) or SmartScreen → More info → Run anyway on Windows.
+
+### ENZO Intelligence — an investigation workspace that cites its evidence
+
+`src/intelligence/` (types / store / fetcher / llm / connectors / orchestrator / router), mounted in `index.ts` beside the other routers; UI in `IntelligenceSection.tsx` + `IntelligenceGraph.tsx`, wired as the `intelligence` workspace tab.
+
+- **What it does.** A plain-English objective becomes a plan of research questions; connectors (web search via Exa, website fetch, GitHub REST readonly, Wikipedia, the user's own documents) collect sources; an LLM pipeline (plan → discover → extract → resolve → verify → report → diff) turns them into an evidence ledger where every claim carries a verbatim machine-checked quote from its source; an entity graph links what was found; discrepancies between sources are surfaced, never silently resolved; the cited report downloads as markdown and the analyst answers questions strictly from the ledger; a re-run diffs against the previous run.
+- **Budgets are enforced by code, not by the model** — page caps, evidence caps (400) and run history (10) live in the orchestrator/store, so a wandering model cannot spend past them.
+- **Fetch hygiene.** `fetcher.ts` is the strictest SSRF guard in the repo: http(s) only, default ports only, no credentials in URLs, DNS re-checked on every redirect hop, 400 KB / 15 s caps, cloud metadata endpoints blocked.
+- **Untrusted-content discipline.** Everything scraped off the web reaches the model wrapped in the UNTRUSTED rule (`llm.ts`) — instructions inside fetched pages are data, never commands.
+- **Ownership + rate limits.** Every route requires a valid vault token; investigations are bound to the creating device id (`x-enzo-owner`) at create time; SSE streams the run phase-by-phase (named events, same contract as the agent runner) and supports cancel.
+- **UX.** The Brief panel carries dedicated **Run planning** (questions only, nothing fetched) and **Run investigation** (full pipeline + diff vs previous run) buttons; a lost SSE stream (tab switch, dropped connection) self-heals — the panel resets from the server-side run state instead of showing a "Stop" button forever.
+
+### Neural Engine, phases 0–4 — a private preference and capability layer
+
+`src/neural-engine/` (types / store / service / capabilities / router); UI in `NeuralSection.tsx` under the `neural` workspace tab. Deliberately stops short of training (phases 5+ / SFT / DPO / LoRA are not in this batch).
+
+- **Private research profile** — 8 preference dimensions, stored per device owner (`owners/<ownerId>.json`), with provenance: task-override > user-explicit > inferred (inference needs ≥ 2 samples and never overrides an explicit choice). `/api/neural-engine/forget` erases on demand.
+- **Graph + events** — typed knowledge nodes and edges learned from use, with an append-only event history as the audit trail; every mutation is schema-gated (allowlists on node types, edge relations, event types) before truncation.
+- **Context assembly** — the chat/research path injects a ≤ 1400-char preference context after memory; empty profile is a no-op; `ENZO_NEURAL_OVERLAY=0` disables injection entirely.
+- **Provider capability registry + ZERO_COST_MODE** — a facts table for 8 providers (free flags, quota behavior, privacy class) drives a fail-closed route check; ZERO_COST_MODE defaults ON and refuses paid routes; it governs neural routing/capability listing only — chat model selection stays BYOK as always (`ENZO_STRICT_ZERO_COST=1` tightens the listing).
+- **The overlay is vault-gated.** The owner id travels in a header, so an unauthenticated caller could previously read another owner's profile through the model's context and write inferred preferences into their file. The neural path now requires vault access, exactly like the memory and skill paths.
+- **A preference value must be one of the allowed values for its dimension** — enforced on the event route as well as on the profile route. A bogus value (`"totally-bogus"`) used to be stored as an explicit preference and injected straight into the prompt.
+- **An inference can never overwrite an explicit choice** (the rule now lives in the service, not in one caller), confirming a value the profile has never seen actually sets it instead of reporting a change that never happened, and inferred learning now reaches the Learning History timeline instead of leaving it empty.
+- **Training consent is its own audit event** (`training_consent_changed`), not a borrowed dimension/value pair that put "trainingAllowed" into the trail as if it were a research-depth value.
+- **The Neural Map gets a 2D/3D camera toggle.** The WebGL renderer already had the 3D orbit camera and its stop-on-touch control, but the map hard-coded the 2D layout, so neither was reachable. The toggle appears next to the renderer switch.
+
+### Docker: the new modules' state survives rebuilds
+
+Investigation and neural-engine data directories are now created node-owned in the image and volume-mounted in documented runs (previously a rebuild wiped container-made investigations — the mount points, created by Docker at runtime, also came up root-owned and every write EACCES'd; both fixed in the Dockerfile `mkdir` layer).
+
+### Bioluminescent Ocean — a second theme in the self-hosted (lite) edition
+
+The docker/lite build used to ship one moving backdrop (the NYC subway ride). It now ships a second: **Bioluminescent Ocean**, real footage of glowing water flowing. The clip starts and ends on the same frame, so it plays as a **single native loop** — no reversed companion, no ping-pong — and it keeps its original colours (the monochrome `graded` treatment belongs to the subway backdrop, not this one). To make the loop point invisible, the fade is **baked into the clip**: a 1.5 s fade-up from black at the start and a 1.5 s fade-down to black at the end, so the cut happens in the dark instead of on a lit frame. The footage is also lifted about 15% in brightness (the gain is applied *before* the fades, so the loop point stays true black). Measured in the running app: luminance 2.7 @0.1 s → 43.9 @1.6 s → 43.5 @8.4 s → 28.2 @9.0 s → 13.6 @9.5 s → 1.7 @9.95 s, looping back to 2.7. The lite theme set is now Default Particles (pure WebGL) + NYC Subway Ride + Bioluminescent Ocean; the full edition gains it too.
+
+### One-click desktop installers with in-app updates
+
+The self-hosted story now has a native path: a macOS `.dmg` (drag to Applications) and a Windows `.exe` (per-user install), both self-contained — bundled Node runtime, production dependencies and the built frontend. No git, no Docker, no system Node. The installers ship the **docker variant** of the app (no Google OAuth, lite themes, port 5200) and the EZ monogram as their icon.
+
+The desktop builds can also **update themselves**: when a new release appears, the app shows a dismissible banner with a one-click **Update** button — the release asset is downloaded, the bundle is swapped in place and ENZO restarts by itself. The reminder is deliberately gentle: **at most twice per rolling week**, never forced, and "Later" simply keeps the current version. Nothing is lost across an update — memory, vault keys, investigations, neural state and generated projects live in the per-user data directory outside the app bundle, and the browser session survives the restart. The update routes are loopback-only and exist only in desktop installs, and they require no provider key, so even a brand-new install hears about updates.
+
+### A security pass over the whole surface
+
+A defensive review ran over the server, the agent tooling and the preview pipeline. Seven fixes, each with a regression test:
+
+- **One pinned fetcher for every user-supplied URL** (`src/agents/gather.ts`). The hostname is resolved once, *every* DNS answer must be public (a name answering with one public and one private address fails closed), and the socket connects to that exact validated address — closing the rebinding window between "we checked the name" and "we opened the socket". Credentials in URLs are rejected, the guard is re-applied on every redirect hop, the response is size-capped while it streams, and the timeout is enforced. The weaker fetcher that read coding-reference pages in `index.ts` was deleted; the shared guard replaced it.
+- **Anonymous callers can no longer reach instance state.** The memory and skill commands (`/remember`, `/skills`, `/learn`, …) now require a vault session, and the agent's memory context, the learned-skill context and the Gmail/Calendar connection status are only injected for an authorized caller.
+- **The neural research profile is vault-gated too.** The owner id travels in a header, so an unauthenticated `POST /api/chat` could read another owner's profile through the model's context *and write inferred preferences into their file*. The overlay now runs only for an authorized caller — proved live: an anonymous research chat writes no owner file, the same authorized chat writes the learned preference **and** an `answer_chosen / inferred` audit event.
+- **A caller's NVIDIA key can only go to NVIDIA** (`src/features/tunnel.ts`). The provider base URL could be overridden per request, which would have sent that key to a host of the caller's choosing. It is now pinned to NVIDIA's endpoint (or the one the operator configured), https only, no credentials, no query string, no fragment.
+- **Project internals are not public assets** (`src/projects/project.ts`). `manifest.json` and the generated backend's runtime databases now return 404 instead of being downloadable, and every HTML/SVG served from a project gets the sandbox CSP — not just the designated entry page, which was the gap that let a secondary page run script on the app's origin.
+- **Generated code can no longer downgrade itself out of the sandbox** (`src/projects/project-runtime.ts`, `src/core/build-verify.ts`). A boot that failed under the runtime permission model used to retry once *without* it; that fallback is gone, and a runtime without a permission model refuses to start the preview instead of running it unguarded.
+- **The vault token is never persisted.** Project ownership stores the device owner only — the vault token is a live bearer credential and is no longer written into `manifest.json` or echoed back in the save response.
+
+### Chat replies that are actually replies
+
+Six real reply bugs, found by using the app rather than reading it: a truncated stream lost the last line of an answer, an image attachment ate the reply, AI Assist overwrote the first frame, a stale auto-mode reference fought the UI, previews were detected when there was nothing to preview, and a failed request could leave a blank bubble. The terminal now keeps the answer it produced.
+
+### Interface polish
+
+- The header's liquid wash had a visible left seam — the alpha feather was reversed; it now blends smoothly beside **ENZO**.
+- The Intelligence node detail is portaled to `document.body`, centred, constrained to a 16 px viewport inset, and its explanation and evidence panes scroll independently (verified at 1440×900 and 390×844).
+- Clicking a graph node explains it: the node's own summary, the evidence behind it, and a doubt chat that answers only from the ledger.
+- The Neural Map got a **2D/3D camera toggle** — the WebGL renderer already had the 3D orbit camera and its stop-on-touch control, but the map hard-coded the 2D layout, so neither was reachable.
+- Both the desktop headbar and the mobile menu carry a **Feedback** link.
+
+### The release count lives on the README
+
+The **app downloads** badge in the README header is GitHub's own counter: every `.dmg` / `.exe` fetch on the releases page, summed by the hourly traffic job and committed as a badge JSON (`traffic/app-downloads.json`). It refreshes itself. A failed fetch keeps the last known number — never a fake zero. One download is one fetch of one installer file, so it counts downloads, not unique people.
+
 ## [2026-10-14] — v1.6.0: external audit remediation — project write authorization, a runtime sandbox for generated code, and a quiet developer-tool preview
 
 Backend tsc + frontend tsc + vite build green; the full test suite (10 files) green; the IDOR suite extended from 3 sections to 7 and passing; the generated-backend sandbox live-verified against a fixture backend.

@@ -21,7 +21,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const MEMORY_PATH = path.resolve(__dirname, 'memory-store.json');
+// ENZO_MEMORY_PATH relocates the store for desktop installs (the .app bundle
+// is read-only, so state lives in the user data dir); docker symlinks this
+// file into ENZO_DATA_DIR, local dev keeps it next to the module.
+const MEMORY_PATH = process.env.ENZO_MEMORY_PATH
+  ? path.resolve(process.env.ENZO_MEMORY_PATH)
+  : path.resolve(__dirname, 'memory-store.json');
 
 // Memory is deliberately model/provider agnostic: entries are keyed by topic,
 // not by the model that produced them, so any model/API can recall work done

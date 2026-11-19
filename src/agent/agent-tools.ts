@@ -24,6 +24,8 @@ import { searchWeb } from '../agent/search.js';
 import { runDeepResearch } from '../agent/research-engine.js';
 import { gmailConsentUrl } from '../features/featureRoutes.js';
 import { readSecretFile, writeSecretFile, deleteSecretFile } from '../agent/crypto-store.js';
+import { ecosystemList, ecosystemFetch, type EcosystemKind } from './ecosystem-tools.js';
+import { attributionHeaders } from '../core/attribution.js';
 
 // Simple in-memory cache for pending email drafts (confirmation flow)
 // Key: hash of draft content, Value: { to, subject, body, expires }
@@ -100,6 +102,9 @@ export interface ToolCtx {
   resumeAfterConnect?: boolean;
   /** IANA timezone string from the client (e.g. "Asia/Kolkata"). Used for calendar events. */
   userTimezone?: string;
+  /** Device id (x-enzo-owner) — scopes per-device stores (investigations,
+   *  neural profile) in the ecosystem tools. */
+  ownerId?: string;
 }
 
 type FeatureKeys = {
@@ -127,7 +132,7 @@ async function resolveChat(keys: FeatureKeys, sys: string, userMsgs: any[]): Pro
   const errors: string[] = [];
 
   if (groq) {
-    const client = new Groq({ apiKey: groq, maxRetries: 0, timeout: LLM_TIMEOUT_MS });
+    const client = new Groq({ apiKey: groq, maxRetries: 0, timeout: LLM_TIMEOUT_MS, defaultHeaders: attributionHeaders() });
     for (const model of models) {
       try {
         const r = await client.chat.completions.create({
@@ -662,6 +667,31 @@ export const TOOL_SPECS = [
   {
     type: 'function',
     function: {
+      name: 'ecosystem_list',
+      description: "List what exists in the user's local ENZO ecosystem right now: investigations, agents, skills, memory, generated projects, neural profile. Fast local read — no network. Call this first when the user asks about 'my investigation/agent/skill/project/memory'.",
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ecosystem_fetch',
+      description: "Fetch one artifact from the user's local ENZO ecosystem by kind and name/id. kind=investigation with report:true returns the latest run's full markdown report + open questions + discrepancies — use it when the user says 'fetch my investigation and explain it'. Local read, size-capped.",
+      parameters: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['investigation', 'agent', 'skill', 'memory', 'project', 'neural'], description: 'Which ecosystem store to read' },
+          query: { type: 'string', description: 'Name, id, or substring to match (empty = most recent)' },
+          report: { type: 'boolean', description: 'For investigations: return the full latest report markdown' },
+          evidence: { type: 'boolean', description: 'For investigations: also include the evidence ledger tail' },
+        },
+        required: ['kind'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'document_assist',
       description: 'Transform a piece of text: rewrite, summarize, continue, or proofread.',
       parameters: {
@@ -686,6 +716,8 @@ const TOOL_LABELS: Record<string, string> = {
   recommend_model: 'Recommending models',
   compare_models: 'Comparing models',
   document_assist: 'Editing text',
+  ecosystem_list: 'Listing local ecosystem',
+  ecosystem_fetch: 'Fetching from local ecosystem',
 };
 
 // ── Dispatcher — never throws; a failing tool returns an { error } object ────
@@ -701,11 +733,79 @@ export async function executeTool(name: string, args: any, ctx: ToolCtx): Promis
       case 'recommend_model': return toolRecommendModel(args, ctx);
       case 'compare_models': return await toolCompareModels(args, ctx);
       case 'document_assist': return await toolDocumentAssist(args, ctx);
+      case 'ecosystem_list': return ecosystemList(ctx.ownerId ?? '');
+      case 'ecosystem_fetch': {
+        // Cap echoed full document/report content so a huge investigation
+        // markdown can't flood the tool result (and the model's context).
+        const res: any = ecosystemFetch(String(args?.kind ?? '') as EcosystemKind, String(args?.query ?? ''), { report: args?.report === true, evidence: args?.evidence === true }, ctx.ownerId ?? '');
+        if (typeof res?.report === 'string' && res.report.length > 6000) {
+          res.report = res.report.slice(0, 6000) + '\n…[report truncated]';
+        }
+        return res;
+      }
       default: return { error: `unknown tool: ${name}` };
     }
   } catch (err: any) {
     return { error: String(err?.message ?? err).slice(0, 300) };
   }
+}
+
+// ── Parallel tool execution ─────────────────────────────────────────────────
+// Read-only tools have no side effects, so when the model batches several in
+// one assistant turn they run concurrently (Promise.all, capped at
+// MAX_PARALLEL_TOOLS). Write tools (gmail_send, calendar_create) always run
+// sequentially in original order and keep their needs_confirmation flow —
+// two writes are NEVER in flight at once. Every call is error-isolated: a
+// failure resolves to an { error } result and never fails the rest of the batch.
+const READ_ONLY_TOOLS = new Set([
+  'web_search', 'deep_research', 'gmail_list', 'calendar_list',
+  'recommend_model', 'compare_models', 'document_assist',
+  'ecosystem_list', 'ecosystem_fetch',
+]);
+const MAX_PARALLEL_TOOLS = 4;
+
+async function runSingleToolCall(tc: any, ctx: ToolCtx, allowedToolSet: Set<string> | null): Promise<any> {
+  if (allowedToolSet && !allowedToolSet.has(tc.function.name)) {
+    return { error: 'tool not permitted for this agent' };
+  }
+  try {
+    return await executeTool(tc.function.name, safeParse(tc.function.arguments), ctx);
+  } catch (err: any) {
+    return { error: String(err?.message ?? err).slice(0, 300) };
+  }
+}
+
+/** Execute one turn's tool calls: read-only ones concurrently (cap 4),
+ * write ones strictly sequentially. Results come back in the ORIGINAL call
+ * order so the tool messages line up with the assistant's tool_calls. */
+async function executeToolCalls(toolCalls: any[], ctx: ToolCtx, allowedToolSet: Set<string> | null): Promise<any[]> {
+  const results: any[] = new Array(toolCalls.length);
+  const readIdxs: number[] = [];
+  const writeIdxs: number[] = [];
+  toolCalls.forEach((tc, i) => (READ_ONLY_TOOLS.has(tc.function.name) ? readIdxs : writeIdxs).push(i));
+
+  // Read-only batch: chunks of MAX_PARALLEL_TOOLS via Promise.all.
+  for (let c = 0; c < readIdxs.length; c += MAX_PARALLEL_TOOLS) {
+    const chunkIdxs = readIdxs.slice(c, c + MAX_PARALLEL_TOOLS);
+    const settled = await Promise.all(chunkIdxs.map((i) => {
+      emitToolStep(ctx, toolCalls[i]);
+      return runSingleToolCall(toolCalls[i], ctx, allowedToolSet);
+    }));
+    chunkIdxs.forEach((i, k) => { results[i] = settled[k]; });
+  }
+
+  // Write batch: one at a time, original order, confirm flow untouched.
+  for (const i of writeIdxs) {
+    emitToolStep(ctx, toolCalls[i]);
+    results[i] = await runSingleToolCall(toolCalls[i], ctx, allowedToolSet);
+  }
+
+  return results;
+}
+
+function emitToolStep(ctx: ToolCtx, tc: any): void {
+  const label = TOOL_LABELS[tc.function.name] || tc.function.name;
+  ctx.onStep(`🔧 ${label}…`);
 }
 
 // ── The agent loop ───────────────────────────────────────────────────────────
@@ -719,7 +819,9 @@ const TOOL_USE_HINT = `
 You are ENZO, an agent with REAL executable tools that access LIVE data. CRITICAL RULES:
 1. NEVER describe what you are about to do or pretend to call a tool — actually CALL it via the function-calling mechanism.
 2. NEVER say "checking...", "retrieving...", "I will use the tool", "Please wait", or similar filler text. Just call the tool immediately.
-3. NEVER ask the user "Would you like me to...?" before calling a read-only tool (gmail_list, web_search, calendar_list). Just call it.
+3. NEVER ask the user "Would you like me to...?" before calling a read-only tool (gmail_list, web_search, calendar_list, ecosystem_list, ecosystem_fetch). Just call it.
+3b. When the user asks about something in their ENZO workspace ('my investigation', 'my agents/skills/projects/memory', 'the report'), call ecosystem_list / ecosystem_fetch — they read the LOCAL stores instantly. For 'fetch my investigation and explain it': ecosystem_fetch with kind=investigation and report:true, then explain the report.
+3c. You MAY batch multiple independent READ-ONLY tool calls in a SINGLE turn — web_search, ecosystem_list, ecosystem_fetch, gmail_list, calendar_list run in PARALLEL (e.g. call gmail_list + calendar_list + web_search together in one turn). NEVER batch write tools (gmail_send, calendar_create): call those one at a time and wait for each result.
 4. If Gmail/Calendar is connected (system prompt will say so), call gmail_list / calendar_list directly — they return REAL data, never fabricate results.
 5. gmail_list returns real emails from the user's inbox with real senders, subjects, dates and snippets. Report exactly what the tool returns — NEVER invent email content.
 6. calendar_list returns real upcoming events. Report exactly what the tool returns — NEVER invent events.
@@ -757,13 +859,12 @@ export async function* fetchOpenAIStream(
 ): AsyncIterable<any> {
   const { provider, apiKey, baseUrl } = providerConfig;
   let url = '';
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // Attribution headers on EVERY provider call, not just OpenRouter.
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...attributionHeaders() };
 
   if (provider === 'openrouter') {
     url = 'https://openrouter.ai/api/v1/chat/completions';
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
-    headers['HTTP-Referer'] = 'https://enzo-unified.local';
-    headers['X-Title'] = 'ENZO Unified AI';
   } else if (provider === 'nvidia') {
     url = `${baseUrl || 'https://integrate.api.nvidia.com/v1'}/chat/completions`;
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
@@ -1367,14 +1468,10 @@ export async function runAgentLoop(a: AgentLoopArgs): Promise<boolean> {
             const retry = await streamTurn(true, false, true);
             if (retry.toolCalls.length) {
               messages.push({ role: 'assistant', content: retry.content || null, tool_calls: retry.toolCalls });
-              for (const tc of retry.toolCalls) {
-                const label = TOOL_LABELS[tc.function.name] || tc.function.name;
-                a.ctx.onStep(`🔧 ${label}…`);
-                const result = allowedToolSet && !allowedToolSet.has(tc.function.name)
-                  ? { error: 'tool not permitted for this agent' }
-                  : await executeTool(tc.function.name, safeParse(tc.function.arguments), a.ctx);
-                messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result).slice(0, 8000) });
-              }
+              const retryResults = await executeToolCalls(retry.toolCalls, a.ctx, allowedToolSet);
+              retry.toolCalls.forEach((tc, i) => {
+                messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(retryResults[i]).slice(0, 8000) });
+              });
               continue;
             }
             content = retry.content;
@@ -1396,17 +1493,15 @@ export async function runAgentLoop(a: AgentLoopArgs): Promise<boolean> {
       // Record the assistant tool-call turn verbatim (required before tool results).
       messages.push({ role: 'assistant', content: content || null, tool_calls: toolCalls });
 
-      // Execute each tool, surface a step line, append the result. A custom
-      // agent's tool subset is enforced here: a call outside the set gets an
-      // error result the model can see (never a crash, never silent execution).
-      for (const tc of toolCalls) {
-        const label = TOOL_LABELS[tc.function.name] || tc.function.name;
-        a.ctx.onStep(`🔧 ${label}…`);
-        const result = allowedToolSet && !allowedToolSet.has(tc.function.name)
-          ? { error: 'tool not permitted for this agent' }
-          : await executeTool(tc.function.name, safeParse(tc.function.arguments), a.ctx);
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result).slice(0, 8000) });
-      }
+      // Execute the turn's tools — independent read-only calls run
+      // concurrently (cap 4), write calls stay sequential — and append each
+      // result in the original call order. A custom agent's tool subset is
+      // enforced inside: a call outside the set gets an error result the model
+      // can see (never a crash, never silent execution).
+      const results = await executeToolCalls(toolCalls, a.ctx, allowedToolSet);
+      toolCalls.forEach((tc, i) => {
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(results[i]).slice(0, 8000) });
+      });
     }
 
     // Iteration cap hit — force a final answer with tools disabled, then

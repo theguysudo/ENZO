@@ -20,13 +20,13 @@
  * Every network touch is an injectable seam (`_search`, `_cloneAndDistill`,
  * `_fetchUrl`, `_distillNotes`) so tests run with zero network.
  */
-import dns from 'dns';
-import { promisify } from 'util';
+import { lookup as dnsLookup } from 'node:dns/promises';
+import https from 'node:https';
+import net from 'node:net';
 import { listSkills, learnSkillFromRepo, type SkillEntry } from '../skills/skills.js';
 import { loadBundledSkills } from '../skills/bundled-skills.js';
 import { searchWebResults, type WebResult } from '../agent/search.js';
-
-const dnsLookup = promisify(dns.lookup);
+import { attributionHeaders } from '../core/attribution.js';
 
 export type GatherSource = 'bundled' | 'learned' | 'github';
 
@@ -233,32 +233,124 @@ async function cloneAndDistillDefault(repoUrl: string, opts: GatherOpts): Promis
 
 // ── Phase 4: user URLs — SSRF-guarded fetch → distilled notes ───────────────
 
-const PRIVATE_IP = /^(127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|::1|fc|fd|fe80)/i;
+type LookupResult = { address: string; family: number };
+type LookupAll = (hostname: string, options: { all: true; verbatim?: boolean }) => Promise<LookupResult[]>;
 const MAX_URL_BYTES = 200 * 1024;
 
-/** SSRF guard: https only, hostname must not be a private/reserved IP literal,
- *  and DNS must resolve to a public address. Throws on violation — callers
- *  turn it into a warning. */
-async function assertPublicHttpsUrl(raw: string): Promise<URL> {
-  let u: URL;
+// Every non-public range is rejected — not just the obvious RFC1918 blocks.
+// Carrier-grade NAT, IETF protocol assignments, documentation ranges and the
+// multicast/reserved space all point nowhere a user-supplied URL should go.
+const NON_PUBLIC_IPS = new net.BlockList();
+for (const [network, prefix] of [
+  ['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
+  ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.0.0.0', 24], ['192.0.2.0', 24],
+  ['192.168.0.0', 16], ['198.18.0.0', 15], ['198.51.100.0', 24], ['203.0.113.0', 24],
+  ['224.0.0.0', 4], ['240.0.0.0', 4],
+] as Array<[string, number]>) {
+  NON_PUBLIC_IPS.addSubnet(network, prefix, 'ipv4');
+}
+for (const [network, prefix] of [
+  ['::', 128], ['::1', 128], ['100::', 64],
+  ['2001:2::', 48], ['2001:db8::', 32], ['2002::', 16], ['fc00::', 7],
+  ['fe80::', 10], ['ff00::', 8],
+] as Array<[string, number]>) {
+  NON_PUBLIC_IPS.addSubnet(network, prefix, 'ipv6');
+}
+
+function isPublicAddress(address: string, family: number): boolean {
+  // IPv4-mapped IPv6 (::ffff:127.0.0.1) is an IPv4 address in disguise.
+  const mapped = family === 6 ? address.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i) : null;
+  if (mapped) return !NON_PUBLIC_IPS.check(mapped[1], 'ipv4');
+  return !NON_PUBLIC_IPS.check(address, family === 6 ? 'ipv6' : 'ipv4');
+}
+
+/** Resolve once, reject every non-public answer, then pin the chosen address. */
+export async function resolvePublicHttpsUrl(raw: string, lookup: LookupAll = dnsLookup as LookupAll) {
+  let url: URL;
   try {
-    u = new URL(raw);
+    url = new URL(raw);
   } catch {
     throw new Error('invalid URL');
   }
-  if (u.protocol !== 'https:') throw new Error('https only');
-  const host = u.hostname.toLowerCase();
+  if (url.protocol !== 'https:') throw new Error('https only');
+  if (url.username || url.password) throw new Error('URL credentials rejected');
+  const host = url.hostname.toLowerCase();
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
     throw new Error('private host rejected');
   }
-  if (PRIVATE_IP.test(host)) throw new Error('private IP rejected');
-  // DNS resolution check (skip for tests pointing at fake hosts with an
-  // injected _fetchUrl — the guard below only runs on the real fetch path).
-  const addrs = await dnsLookup(host, { all: true }).catch(() => []);
-  for (const a of addrs) {
-    if (PRIVATE_IP.test(a.address) || a.address === '::1') throw new Error('host resolves to a private address');
+  // Every answer must be public: a host that resolves to one public and one
+  // private address fails closed rather than getting the public one.
+  const addresses = await lookup(host, { all: true, verbatim: true });
+  if (!addresses.length) throw new Error('host did not resolve');
+  if (addresses.some(({ address, family }) => !isPublicAddress(address, family))) {
+    throw new Error('host resolves to a private address');
   }
-  return u;
+  return { url, address: addresses[0] };
+}
+
+/** GET over a pinned address. The socket connects to the address we validated,
+ *  so a second DNS answer (rebinding) cannot swap in a private host between
+ *  the check and the request. */
+function requestPinnedText(
+  url: URL,
+  address: LookupResult,
+  maxBytes: number,
+  accept: string,
+): Promise<{ status: number; headers: import('http').IncomingHttpHeaders; text: string }> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(url, {
+      method: 'GET',
+      headers: { 'User-Agent': 'ENZO-Agent-Builder/1.0', Accept: accept },
+      lookup: ((_hostname: string, options: { all?: boolean }, cb: (...args: any[]) => void) => {
+        if (options?.all) cb(null, [address]);
+        else cb(null, address.address, address.family);
+      }) as any,
+    }, (res) => {
+      const chunks: Buffer[] = [];
+      let size = 0;
+      res.on('data', (chunk: Buffer) => {
+        size += chunk.length;
+        if (size > maxBytes) {
+          res.destroy(new Error('response too large'));
+          return;
+        }
+        chunks.push(chunk);
+      });
+      res.on('end', () => resolve({
+        status: res.statusCode || 0,
+        headers: res.headers,
+        text: Buffer.concat(chunks).toString('utf8'),
+      }));
+      res.on('error', reject);
+    });
+    req.setTimeout(15_000, () => req.destroy(new Error('request timed out')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+async function fetchPinnedText(
+  raw: string,
+  maxBytes: number,
+  accept: string,
+  lookup: LookupAll = dnsLookup as LookupAll,
+): Promise<{ text: string; contentType: string }> {
+  let current = raw;
+  for (let hop = 0; hop < 3; hop++) {
+    // The guard is re-applied on every redirect hop — a public host may bounce
+    // to a private one.
+    const { url, address } = await resolvePublicHttpsUrl(current, lookup);
+    const res = await requestPinnedText(url, address, maxBytes, accept);
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.location;
+      if (!location) throw new Error('redirect missing location');
+      current = new URL(location, url).toString();
+      continue;
+    }
+    if (res.status < 200 || res.status >= 300) throw new Error(`fetch failed: HTTP ${res.status}`);
+    return { text: res.text, contentType: String(res.headers['content-type'] || '') };
+  }
+  throw new Error('too many redirects');
 }
 
 /** Strip HTML to readable text (cheap regex pass — fetched pages are distilled
@@ -269,37 +361,37 @@ function htmlToText(html: string): string {
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
     .replace(/&#\d+;/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-/** Real fetch: SSRF-guarded, redirects followed manually (max 3) with the
- *  guard re-applied to every hop, hard 200KB read cap. Exported so tests can
- *  exercise the guard directly. */
+/** Real fetch: HTTPS-only, DNS-pinned, redirects revalidated per hop, 200KB cap. */
 export async function fetchUrlGuarded(raw: string): Promise<string> {
-  let current = raw;
-  for (let hop = 0; hop < 3; hop++) {
-    const u = await assertPublicHttpsUrl(current);
-    const res = await fetch(u, {
-      headers: { 'User-Agent': 'ENZO-Agent-Builder/1.0', Accept: 'text/html,text/plain,application/json;q=0.9,*/*;q=0.5' },
-      redirect: 'manual',
-      signal: AbortSignal.timeout(15000),
-    });
-    if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
-      current = new URL(res.headers.get('location')!, u).toString();
-      continue;
-    }
-    if (!res.ok) throw new Error(`fetch failed: HTTP ${res.status}`);
-    const buf = await res.arrayBuffer();
-    const text = new TextDecoder('utf-8', { fatal: false }).decode(buf.slice(0, MAX_URL_BYTES));
-    const ct = res.headers.get('content-type') || '';
-    return ct.includes('html') ? htmlToText(text) : text;
+  const { text, contentType } = await fetchPinnedText(
+    raw,
+    MAX_URL_BYTES,
+    'text/html,text/plain,application/json;q=0.9,*/*;q=0.5',
+  );
+  return contentType.includes('html') ? htmlToText(text) : text;
+}
+
+/** Coding references need source HTML but share the same SSRF boundary. */
+export async function fetchCodingReferenceGuarded(raw: string): Promise<string | null> {
+  try {
+    const { text, contentType } = await fetchPinnedText(
+      raw,
+      100_000,
+      'text/html,application/xhtml+xml,text/plain;q=0.8',
+    );
+    if (!contentType.includes('text/html') && !contentType.includes('text/plain')) return null;
+    return text;
+  } catch {
+    return null;
   }
-  throw new Error('too many redirects');
 }
 
 /** Extractive fallback when no LLM key is available: first sentences of the
@@ -337,7 +429,7 @@ async function distillNotesDefault(task: string, text: string, source: string, g
   if (groq) {
     try {
       const { Groq } = await import('groq-sdk');
-      const client = new Groq({ apiKey: groq, timeout: 15000, maxRetries: 0 });
+      const client = new Groq({ apiKey: groq, timeout: 15000, maxRetries: 0, defaultHeaders: attributionHeaders() });
       const r = await client.chat.completions.create({
         model: 'openai/gpt-oss-20b', // live-verified json mode (2026-09-06) — llama-3.1-8b-instant delisted
         messages: [{ role: 'system', content: sys }, { role: 'user', content: 'Distill into notes. JSON only.' }],

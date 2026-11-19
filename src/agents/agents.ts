@@ -22,6 +22,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { type NeuralState, neuralFocusBlock, sanitizeNeuralState } from './neural.js';
+import { attributionHeaders } from '../core/attribution.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ENZO_AGENTS_DIR lets tests relocate the store to a temp dir; default is the
@@ -545,7 +546,7 @@ export async function distillAgentMemory(agent: AgentEntry, runOutput: string, u
       const orKey = process.env.OPENROUTER_API_KEY || '';
       if (groq) {
         const { Groq } = await import('groq-sdk');
-        const client = new Groq({ apiKey: groq, timeout: 15000, maxRetries: 0 });
+        const client = new Groq({ apiKey: groq, timeout: 15000, maxRetries: 0, defaultHeaders: attributionHeaders() });
         const r = await client.chat.completions.create({
           model: 'openai/gpt-oss-20b', // live-verified json mode (2026-09-06) — llama-3.1-8b-instant delisted
           messages: [{ role: 'system', content: sys }, { role: 'user', content: 'Return JSON only.' }],

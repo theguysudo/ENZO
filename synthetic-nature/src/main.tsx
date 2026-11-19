@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import './styles/homepage-polish.css'
 import App from './App'
+import ErrorBoundary from './components/ErrorBoundary'
 import { AuthCallback } from './components/AuthCallback'
 import { VaultUnlock } from './components/VaultGate'
 import * as keyVault from './lib/keyVault'
@@ -29,7 +30,9 @@ function Root() {
 keyVault.init().finally(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <Root />
+      <ErrorBoundary>
+        <Root />
+      </ErrorBoundary>
     </StrictMode>,
   )
 })

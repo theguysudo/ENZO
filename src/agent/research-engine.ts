@@ -38,6 +38,7 @@
 
 import Groq from 'groq-sdk';
 import { searchWebResults, type WebResult } from '../agent/search.js';
+import { attributionHeaders } from '../core/attribution.js';
 
 export interface ResearchSource extends WebResult {
   relevance: number;      // agent-assigned (0–10); 9+ for opened & verified
@@ -73,9 +74,9 @@ export interface EngineOptions {
   query: string;
   exaKey: string;
   groqKey: string;
-  maxFinal?: number;            // cap on evidence pool for synthesis (default 40)
-  maxTotal?: number;            // hard cap on ledger size (default 180)
-  contentChars?: number;        // full-text chars fetched per READ (default 6000)
+  maxFinal?: number;            // cap on evidence pool for synthesis (default 24)
+  maxTotal?: number;            // hard cap on ledger size (default 120)
+  contentChars?: number;        // full-text chars fetched per READ (default 4000)
   /** Hard budgets — the agent can end itself earlier via DONE. */
   maxSearches?: number;         // default 22
   maxReads?: number;            // default 28
@@ -174,7 +175,7 @@ async function askAgent(groq: Groq, system: string, user: string): Promise<any> 
         messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
         ...(model.jsonMode ? { response_format: { type: 'json_object' } } : {}),
         temperature: 0.25,
-        max_tokens: 1600, // reasoning models: ~600 reasoning tokens before the JSON
+        max_tokens: 1200, // reasoning models: ~600 reasoning tokens before the JSON (TOKENS-4 cap)
       });
       const raw = (r.choices[0]?.message?.content ?? '{}')
         .replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
@@ -192,9 +193,9 @@ async function askAgent(groq: Groq, system: string, user: string): Promise<any> 
 export async function runDeepResearch(opts: EngineOptions): Promise<ResearchReport> {
   const {
     query, exaKey, groqKey,
-    maxFinal = 40,
-    maxTotal = 180,
-    contentChars = 6000,
+    maxFinal = 24,
+    maxTotal = 120,
+    contentChars = 4000,
     maxSearches = 22,
     maxReads = 28,
     maxIterations = 56,
@@ -205,7 +206,7 @@ export async function runDeepResearch(opts: EngineOptions): Promise<ResearchRepo
   console.log('[research-engine] Exa key:', exaKey ? 'present' : 'MISSING');
   console.log('[research-engine] Groq key:', groqKey ? 'present' : 'MISSING');
 
-  const groq = new Groq({ apiKey: groqKey });
+  const groq = new Groq({ apiKey: groqKey, defaultHeaders: attributionHeaders() });
   const startTime = Date.now();
 
   // ── Agent state ──
@@ -247,7 +248,7 @@ JUDGMENT POLICY (this is where you act like Perplexity, not a crawler):
 - Chase angles: latest + foundational + quantitative data + opposing view + real cases. If the ledger is heavy on one angle, search for the missing one instead of more of the same.
 - If a search returns weak results, reformulate — don't drop the topic.
 - Track what you've established via NOTE actions so you don't re-search it.
-- Watch your budgets. When evidence covers the question from enough independent angles — target 40–50 KEPT sources (at least ~15 of them READ in full) for a raw-news/research brief; for a narrower question 12–30 is fine. Don't waste budget re-confirming what you noted.
+- Watch your budgets. When evidence covers the question from enough independent angles — target 20–30 KEPT sources (at least ~10 of them READ in full) for a raw-news/research brief; for a narrower question 8–18 is fine. Don't waste budget re-confirming what you noted.
 
 OUTPUT: a single JSON object only.`;
 
@@ -459,9 +460,9 @@ Take your next action (one JSON object).`;
   } catch { /* fallback below */ }
   if (clusters.length === 0) clusters = [{ label: 'Findings', sourceIndices: finalPool.map((_, i) => i + 1) }];
 
-  // Cap the synthesis context so 40-50 sources don't blow the writer model's
-  // window: spread a fixed budget across the pool (min 1200 chars each).
-  const MAX_CONTEXT_CHARS = 120_000;
+  // Cap the synthesis context so the kept sources don't blow the writer model's
+  // window (TOKENS-4): spread a fixed budget across the pool (min 1200 chars each).
+  const MAX_CONTEXT_CHARS = 80_000;
   const perSourceChars = Math.min(contentChars, Math.max(1200, Math.floor(MAX_CONTEXT_CHARS / finalPool.length)));
 
   const context = finalPool

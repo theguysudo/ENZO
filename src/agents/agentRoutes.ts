@@ -37,6 +37,7 @@ import { skillGuidesFor, scheduledToolSpecs } from './scheduler.js';
 import { listSkills, getSkill } from '../skills/skills.js';
 import { loadBundledSkills } from '../skills/bundled-skills.js';
 import { runAgentLoop, type ToolCtx, type ProviderConfig, TOOL_SPECS } from '../agent/agent-tools.js';
+import { attributionHeaders } from '../core/attribution.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -201,12 +202,9 @@ async function brainChat(
     : (keys[prov] || process.env[`${prov.toUpperCase()}_API_KEY`] || '');
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...attributionHeaders(),
     ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
   };
-  if (prov === 'openrouter') {
-    headers['HTTP-Referer'] = 'https://enzo-hub.duckdns.org';
-    headers['X-Title'] = 'ENZO AI Hub';
-  }
   const r = await fetch(`${baseUrls[prov]}/chat/completions`, {
     method: 'POST',
     headers,
@@ -300,7 +298,7 @@ async function legacyDraftChat(
   const orKey = keys.openrouter || process.env.OPENROUTER_API_KEY || '';
   if (groq) {
     const { Groq } = await import('groq-sdk');
-    const client = new Groq({ apiKey: groq, timeout: 45000, maxRetries: 0 });
+    const client = new Groq({ apiKey: groq, timeout: 45000, maxRetries: 0, defaultHeaders: attributionHeaders() });
     const r = await client.chat.completions.create({
       model: 'openai/gpt-oss-20b',
       messages: [{ role: 'system', content: sys }, { role: 'user', content: user }],

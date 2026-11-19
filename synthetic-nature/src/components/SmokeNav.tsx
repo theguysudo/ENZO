@@ -149,7 +149,7 @@ const FRAGMENT_SHADER = `
       + 0.12 * (body - 0.5)
       + 0.08 * (bottomPlume - 0.5)
       + 0.04 * sin(current.y * 3.0 - time * 1.4);
-    float alpha = smoothstep(0.24, 0.72, feather);
+    float alpha = 1.0 - smoothstep(0.24, 0.72, feather);
 
     gl_FragColor = vec4(clamp(color, 0.0, 1.0), alpha);
   }

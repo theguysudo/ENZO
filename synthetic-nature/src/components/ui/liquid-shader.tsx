@@ -41,9 +41,41 @@ export function InteractiveNebulaShader({
     // integrated card instead of waking the discrete one, and the pixel
     // ratio is capped at 1.5 — a ray-marched nebula at full retina DPR
     // shades 4× the pixels for no visible gain.
-    const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'low-power' })
+    // WebGL context creation can legitimately fail — no GPU in a headless/
+    // remote session, the browser's live-context cap reached (it evicts the
+    // oldest context once ~16 are open), or the GPU process resetting. This
+    // used to throw inside the effect, and with no error boundary in the tree
+    // an uncaught effect error unmounts the WHOLE app: the "page goes black"
+    // crash. A background shader must never take the app down — degrade to a
+    // plain background instead.
+    let renderer: THREE.WebGLRenderer
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'low-power' })
+    } catch (err) {
+      console.warn('[nebula] WebGL unavailable — background shader skipped:', err instanceof Error ? err.message : err)
+      return
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
     container.appendChild(renderer.domElement)
+
+    // Animation-loop state — declared before the context-lost handler so the
+    // handler can pause the loop and cancel the pending frame.
+    let paused = document.hidden
+    let rafId = 0
+    let contextLost = false
+
+    // A lost context (GPU reset, tab backgrounded too long, driver update) must
+    // stop the loop cleanly rather than throw on every subsequent render call.
+    const onContextLost = (e: Event) => {
+      e.preventDefault()
+      paused = true
+      if (contextLost) return
+      contextLost = true
+      cancelAnimationFrame(rafId)
+      rafId = 0
+      console.warn('[nebula] WebGL context lost — background shader stopped.')
+    }
+    renderer.domElement.addEventListener('webglcontextlost', onContextLost)
 
     const scene = new THREE.Scene()
     const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
@@ -149,8 +181,6 @@ export function InteractiveNebulaShader({
     // Animation loop — capped at 30fps (a slow-moving nebula needs no more),
     // and suspended while the tab is hidden. iTime accumulates only on
     // rendered frames (clamped) so returning to the tab never jumps the pose.
-    let paused = document.hidden
-    let rafId = 0
     let lastDraw = 0
     let lastTick = performance.now()
     let iTime = 0
@@ -169,16 +199,17 @@ export function InteractiveNebulaShader({
 
     const onVisibility = () => {
       const wasPaused = paused
-      paused = document.hidden
+      paused = document.hidden || contextLost
       if (wasPaused && !paused && !rafId) rafId = requestAnimationFrame(render)
     }
     document.addEventListener('visibilitychange', onVisibility)
 
-    rafId = requestAnimationFrame(render)
+    if (!contextLost) rafId = requestAnimationFrame(render)
 
     return () => {
       window.removeEventListener('resize', onResize)
       document.removeEventListener('visibilitychange', onVisibility)
+      renderer.domElement.removeEventListener('webglcontextlost', onContextLost)
       cancelAnimationFrame(rafId)
       container.removeChild(renderer.domElement)
       material.dispose()

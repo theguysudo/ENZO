@@ -41,6 +41,20 @@ const MARKETPLACE_CYBERPUNK_VIDEOS: Record<MarketplaceCyberpunkScene, SceneSourc
     graded: true,
     pixelWave: true,
   },
+  // Bioluminescent ocean — real footage of glowing water flowing. The clip
+  // starts and ends on the same frame, so it plays as a native loop (no
+  // reversed companion, no ping-pong). NO `graded` here: that grade is the
+  // subway's monochrome Unsplash look, and this one keeps its colours.
+  // The clip carries a baked 1.5s fade-in / 1.5s fade-out, so the loop point
+  // is black → black and the cut is invisible. `?v=3` busts the 30-day
+  // immutable cache that /background_elements is served with, so browsers
+  // that already fetched an earlier build of this clip pick this one up.
+  bioluminescent_ocean: {
+    forward: '/background_elements/marketplace/Bioluminescent_ocean.mp4?v=3',
+    reversed: '/background_elements/marketplace/Bioluminescent_ocean.mp4?v=3',
+    isSeamlessLoop: true,
+    playbackRate: 1.0,
+  },
   rooftop: {
     forward: '/background_elements/marketplace/Anime_cyberpunk_rooftop_dojo_20260719.mp4',
     reversed: '/background_elements/marketplace/Anime_cyberpunk_rooftop_dojo_20260719.mp4',

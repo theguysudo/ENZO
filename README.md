@@ -21,11 +21,16 @@
 <p align="center">
   <a href="#quickstart">Quickstart</a> ·
   <a href="https://enzo-hub.duckdns.org">Live demo</a> ·
-  <a href="#six-surfaces-one-workspace">What's inside</a> ·
+  <a href="#nine-surfaces-one-workspace">What's inside</a> ·
   <a href="#security">Security</a> ·
-  <a href="#whats-new-in-v160">What's new</a> ·
+  <a href="#whats-new-in-v170">What's new</a> ·
   <a href="#usage-guide">Usage guide</a> ·
-  <a href="docs/CHANGELOG.md">Changelog</a>
+  <a href="docs/CHANGELOG.md">Changelog</a> ·
+  <a href="https://forms.gle/EV2EaAZySM8Tx1Wq7">Feedback</a>
+</p>
+
+<p align="center">
+  <strong>Feedback:</strong> found a bug, want a feature, or just want to say how ENZO is working out for you? <a href="https://forms.gle/EV2EaAZySM8Tx1Wq7"><strong>Fill in the short form</strong></a> — it takes a minute.
 </p>
 
 <p align="center">
@@ -35,6 +40,7 @@
   <a href="https://github.com/theguysudo/ENZO/blob/main/TRAFFIC.md"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftheguysudo%2FENZO%2Fmain%2Ftraffic%2Funique-clones.json" alt="unique cloners"></a>
   <a href="https://github.com/theguysudo/ENZO/blob/main/TRAFFIC.md"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftheguysudo%2FENZO%2Fmain%2Ftraffic%2Ftotal-clones.json" alt="total clones"></a>
   <a href="https://github.com/theguysudo/ENZO/pkgs/container/enzo"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftheguysudo%2FENZO%2Fmain%2Ftraffic%2Fdocker-pulls.json" alt="docker pulls"></a>
+  <a href="https://github.com/theguysudo/ENZO/releases"><img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Ftheguysudo%2FENZO%2Fmain%2Ftraffic%2Fapp-downloads.json" alt="app downloads"></a>
   <a href="https://github.com/theguysudo/ENZO/actions/workflows/ci.yml/badge.svg"><img src="https://github.com/theguysudo/ENZO/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License"></a>
   <a href="#quickstart"><img src="https://img.shields.io/badge/docker-ghcr.io%2Ftheguysudo%2Fenzo-2496ed" alt="Docker"></a>
@@ -52,20 +58,94 @@
 
 > **Chat with 300+ models. Build agents that write their own operating manuals. Research, generate code, run it all — on your keys, on your infrastructure.** When you send a message, the request goes from your browser through ENZO to the provider you picked, and you pay that provider their normal price. **Nothing sits in between taking a cut.** There is no ENZO account, no usage meter, no subscription.
 
+## What's new in v1.7.0
+
+Four substantial things, plus a batch of real bugs that are now fixed: a workspace that investigates and **cites its evidence**, a private neural layer that learns how you like to work, **one-click desktop apps** for people who don't want Docker, and a second theme in the self-hosted edition.
+
+The top navigation's liquid animation now blends smoothly beside **ENZO**, and both the desktop headbar and mobile menu include a [Feedback](https://forms.gle/EV2EaAZySM8Tx1Wq7) link.
+
+### ENZO Intelligence — an investigation workspace that cites its evidence
+
+A plain-English objective becomes a plan of research questions; connectors (web search via Exa, website fetch, GitHub read-only, Wikipedia, your own documents) collect the sources; an LLM pipeline — **plan → discover → extract → resolve → verify → report → diff** — turns them into an **evidence ledger** where every claim carries a verbatim, machine-checked quote from the source it came from.
+
+- **The graph is the map.** Entities found across sources are linked. Click any node for a responsive, viewport-contained detail popup with independently scrollable explanation and evidence, then ask evidence-grounded follow-up questions.
+- **Disagreements are surfaced, not smoothed over.** When two sources conflict, the conflict is shown instead of being silently resolved.
+- **Two buttons, two depths.** **Run planning** asks the questions and fetches nothing; **Run investigation** runs the whole pipeline and diffs the result against the previous run.
+- **The report downloads as markdown**, and the analyst answers questions strictly from the ledger.
+- **The budgets live in code, not in the model's head** — page caps, evidence caps (400) and run history (10) are enforced by the orchestrator, so a wandering model cannot spend past them.
+- **Scraped pages are data, never commands** — everything fetched from the web reaches the model wrapped in an UNTRUSTED rule.
+- **It is the strictest fetcher in the repo** — http(s) only, default ports only, no credentials in URLs, DNS re-checked on every redirect hop, 400 KB / 15 s caps, cloud metadata endpoints blocked.
+- **Private and owned** — a valid vault token is required, every investigation is bound to the device that created it, and the run streams phase-by-phase over SSE with a working cancel. A dropped stream re-syncs from server-side state instead of hanging.
+
+### Neural Engine, phases 0–4 — a private preference layer
+
+- **A private research profile** — 8 preference dimensions stored per device owner, with honest provenance: task-override > what you said explicitly > what was inferred. Inference needs at least two samples and never overrides an explicit choice. `forget` erases the profile on demand.
+- **A knowledge graph and an audit trail** — typed nodes and edges learned from use, plus an append-only event history. Every mutation is schema-gated before it is written.
+- **It shows up where it matters** — a ≤1400-character preference context is injected after memory on the chat and research paths. An empty profile is a no-op; `ENZO_NEURAL_OVERLAY=0` turns the whole thing off.
+- **Zero-cost mode** — a provider capability registry (8 providers: free flags, quota behaviour, privacy class) drives a fail-closed route check that refuses paid routes. It governs neural routing and capability listing only — model selection in chat stays BYOK, as always.
+
+### One-click desktop apps — no Docker, no git, no Node
+
+A macOS `.dmg` (drag to Applications) and a Windows `.exe` (per-user install) that carry the whole app: a bundled Node runtime, production dependencies and the built frontend. They ship the **docker variant** — no Google sign-in, lite themes, port **5200** — and the EZ monogram as their icon.
+
+- **Two Windows editions**: `less` (the docker-variant theme set, small download) and `full` (every theme, every video).
+- **It updates itself.** When a new release appears, a small banner offers **Update now** — the asset is downloaded, the bundle is swapped in place and ENZO restarts. The reminder is deliberately gentle: **at most twice per rolling week**, never forced, and "Later" keeps the current version.
+- **Nothing is lost.** Memory, vault keys, investigations, neural state and generated projects live in a per-user data directory *outside* the app bundle, so the swap cannot take them with it. The browser session survives the restart.
+- The update routes are loopback-only and exist only in desktop installs, and they need no provider key — even a brand-new install hears about updates.
+
+### Bioluminescent Ocean — a second theme in the self-hosted edition
+
+The docker/lite build used to ship one moving backdrop (the NYC subway ride). It now ships a second: **Bioluminescent Ocean**, real footage of glowing water flowing. The clip starts and ends on the same frame, so it plays as a single native loop — no reversed companion — and it keeps its original colours. The fade is baked into the clip (1.5 s up from black, 1.5 s down to black), so the loop point happens in the dark and the cut is invisible.
+
+### Chat bugs that are actually fixed
+
+Six real reply bugs, found by using the app rather than reading it: a truncated stream lost the last line of an answer, an image attachment ate the reply, AI Assist overwrote the first frame, a stale auto-mode reference fought the UI, previews were detected when there was nothing to preview, and a failed request could leave a blank bubble. The terminal now keeps the answer it produced.
+
+### A security pass over the whole surface
+
+A defensive review ran over the server, the agent tooling and the preview pipeline. The fixes are small and specific:
+
+- **Every user-supplied URL now goes through one pinned fetcher.** The hostname is resolved once, *every* DNS answer must be public, and the socket connects to that exact address — so a name that answers with a public IP and then a private one can no longer be talked into reaching the private one. The guard is re-applied on every redirect hop, and the same hardened fetcher replaced the weaker one that used to read coding-reference pages.
+- **Anonymous callers can no longer touch instance state.** The memory and skill commands, the agent's memory context, the learned-skill context and the neural research profile all require a vault session now. The owner id travels in a header, so an unauthenticated chat used to be able to write preferences into someone else's profile file.
+- **A caller's NVIDIA key can only go to NVIDIA.** The provider base URL could be overridden per request, which would have sent that key to a host of the caller's choosing. It is now pinned to NVIDIA's endpoint (or the one the operator configured), https only, no credentials, no query string.
+- **Project internals are not public assets.** `manifest.json` and the generated backend's databases return 404 instead of being downloadable, and every HTML/SVG served from a project gets the sandbox CSP — not just the designated entry page.
+- **Generated code can no longer downgrade itself out of the sandbox.** A boot that fails under the runtime permission model used to retry once without it; there is no such fallback now, and a runtime without a permission model refuses to start the preview instead of running it unguarded.
+
+### Docker state that survives a rebuild
+
+Investigation and neural-engine data directories are created node-owned in the image and volume-mounted in the documented runs. Previously a rebuild wiped container-made investigations — and the mount points, created by Docker at runtime, came up root-owned, so every write failed with `EACCES`. Both are fixed in the image itself.
+
+### The release count is on the README
+
+The **app downloads** badge in the header is GitHub's own counter: every `.dmg` / `.exe` fetch on the releases page, summed by the hourly traffic job and committed as a badge JSON. It updates itself — no manual step, and the number on the README is the number GitHub has.
+
+> Full detail, including what was audited and what was measured, is in the [changelog](docs/CHANGELOG.md).
+
 ## What's inside
 
 | Inside ENZO | Count | What it gives you |
 |---|---:|---|
 | Models in one catalog | 300+ | across 9 providers, health-checked live |
-| Injectable agent skills | 74 bundled | domain playbooks the agent loop pulls in per run |
+| App downloads | live badge | every `.dmg` / `.exe` fetch on the releases page, synced hourly from GitHub's own counter |
+| Injectable agent skills | 75 bundled | domain playbooks the agent loop pulls in per run |
 | Self-drafting agents | 2-pass builder | plain-English task in, operating manual out |
+| Investigation workspace | 1 | every claim carries a machine-checked quote from its source |
 | CI pipeline stages | 7 | including a black-box security pentest on every push |
 | Pentest assertions | 44 | auth bypass, IDOR, hostile payloads, stream integrity |
-| Unit + security tests | 298 | agent, vault, crypto and model suites |
-| TypeScript (strict) | ~44,000 lines | one language, strict mode throughout |
-| Releases | 5 | v1.0.0 → v1.4.0, everything in the [changelog](docs/CHANGELOG.md) |
+| Unit + security tests | 13 suites | agent, vault, crypto, model, intelligence, neural and desktop-update — 460 checks |
+| TypeScript (strict) | ~60,000 lines | one language, strict mode throughout |
+| Releases | 8 | v1.0.0 → v1.7.0, everything in the [changelog](docs/CHANGELOG.md) |
 
 ## Quickstart
+
+**No Docker? No git? Download the app.** The one-click desktop builds are attached to every GitHub release from v1.7.0 onward — a `.dmg` for macOS (drag it into Applications) and a `.exe` for Windows (double-click it). They run on port **5200** and need nothing else installed on the machine.
+
+- **macOS** (Apple Silicon) → [Releases](https://github.com/theguysudo/ENZO/releases) → `ENZO-<version>-macOS-arm64.dmg` — Intel Macs: use the Docker install below
+- **Windows** → `ENZO-<version>-less-theme-setup.exe` (the docker-variant themes, small) or `ENZO-<version>-full-theme-setup.exe` (every theme)
+
+First launch of a downloaded copy: macOS asks you to right-click → **Open** (the build is ad-hoc signed, not notarized), Windows shows SmartScreen → **More info** → **Run anyway**. The app opens your browser and the server keeps running in the background; quitting from the Dock shuts it down.
+
+**Prefer Docker?** One command, and it stays yours across upgrades:
 
 ```bash
 git clone https://github.com/theguysudo/ENZO.git
@@ -83,6 +163,8 @@ docker run -d -p 5001:5001 --name enzo \
   -v enzo-projects:/app/generated-projects \
   -v enzo-skills:/app/src/skills/skills \
   -v enzo-memory:/app/data \
+  -v enzo-intelligence:/app/src/intelligence/data \
+  -v enzo-neural-engine:/app/src/neural-engine/data \
   ghcr.io/theguysudo/enzo:latest
 ```
 
@@ -117,7 +199,7 @@ Don't want the local hassle — or want ENZO reachable from any device? The Cola
 > [!NOTE]
 > The notebook runs on Google's hardware, so Colab's terms apply while you're there — but your **model keys stay yours**: paste any provider key after boot, exactly like self-hosting, and nothing is ever stored on our side. When the Colab session ends, everything on the VM is gone.
 
-## Six surfaces, one workspace
+## Nine surfaces, one workspace
 
 | Surface | What it does |
 |---|---|
@@ -126,6 +208,8 @@ Don't want the local hassle — or want ENZO reachable from any device? The Cola
 | **Music player** | Search any song and play it in the marketplace — keyless, no YouTube API key — with a 5-band equalizer that actually re-shapes the audio |
 | **Agent builder** | Describe a task in plain English; ENZO drafts the agent's full operating manual, and the agent keeps training itself on your activity from then on |
 | **Research mode** | A deep-research loop that writes its own queries, reads what it finds, and decides when it's done — under hard budgets so it can't burn your key |
+| **Intelligence** | Turn an objective into an evidence ledger — sources, quotes, an entity graph and a cited report you can download |
+| **Neural** | A private preference layer that learns how you like to work and injects that into every run |
 | **Code-gen** | Writes a coding project, boots it, previews it live, and tells you when it's broken |
 | **Vault** | Every key sealed in the browser, attached per-request, wipeable in one click |
 
@@ -146,7 +230,7 @@ Most "AI workspaces" hold your keys, meter your usage, or need a subscription to
 | Where API keys live | your browser, AES-256-GCM sealed under a **non-extractable** key | vendor's servers | server-side env/config |
 | Server reads your keys | **hosted mode: never** — relay-only, CI-enforced. Self-hosted: only the key you explicitly claim, for scheduled agents — stated in the [threat model](docs/SECURITY.md) | yes | usually yes |
 | Middleman fee | none | subscription / per-seat | none |
-| Install | `docker compose up -d`, zero config | none (it's hosted) | often multi-service setup |
+| Install | one-click app, or `docker compose up -d` — zero config | none (it's hosted) | often multi-service setup |
 | Agents improve themselves | neural layer learns from your activity | no | no |
 | Security testing in CI | black-box pentest, 44 asserts, every push | opaque | rarely |
 
@@ -163,7 +247,7 @@ The full threat model is written down — checkable, with the code that makes ea
 - **Every push runs a 44-assertion black-box pentest** against a booted server — auth bypass, hostile payloads, IDOR, stream integrity — plus a keyless-boot proof: the server must start with zero provider keys. That's the BYOK guarantee, tested, not promised.
 - **The limits are stated up front.** Self-hosted mode stores the first key you claim in the container `.env` (sealed in the memory volume) so scheduled agents can run while your browser is closed — that trade is documented, not hidden. [docs/SECURITY.md](docs/SECURITY.md) covers what's protected, what isn't, and why.
 
-## What's new in v1.6.0
+## What's new in v1.6.0 (previous)
 
 An external security & UX audit of the v1.5.0 tree, acted on in full — plus a preview panel that finally behaves like an IDE, not an AI landing page.
 
@@ -191,6 +275,16 @@ An external security & UX audit of the v1.5.0 tree, acted on in full — plus a 
 - Full history: [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
 
 ## Usage guide
+
+### One-click app (no Docker, no git, no Node)
+
+The desktop builds are the fastest way in for someone who has never opened a terminal.
+
+**macOS.** Download the `.dmg` from [Releases](https://github.com/theguysudo/ENZO/releases), open it, drag **ENZO** into **Applications**, then double-click it. The first launch of a downloaded copy needs right-click → **Open** (the build is ad-hoc signed, not notarized — a locally built copy has no quarantine at all). The server listens on **http://localhost:5200** and your browser opens on it. Quit from the Dock to stop the server.
+
+**Windows.** Download `ENZO-<version>-less-theme-setup.exe` (the docker-variant themes) or `ENZO-<version>-full-theme-setup.exe` (every theme). It installs per-user — no administrator rights, no separate runtime — and starts ENZO and your browser. SmartScreen on an unsigned build → **More info** → **Run anyway**.
+
+**Updating.** The app checks for new releases and offers a one-click **Update now** in a small banner (at most twice per rolling week, never forced). The bundle is swapped in place and ENZO restarts. Memory, vault keys, investigations, neural state and generated projects live outside the app bundle, so nothing is lost across an update.
 
 ### macOS
 
@@ -273,7 +367,7 @@ Every push to `main` runs the full pipeline in [`.github/workflows/ci.yml`](.git
 </p>
 
 1. **Security checks** — no key literals in tracked files, `.env` never committed, keys never read from raw `localStorage`, no onboarding bypasses
-2. **Backend** — strict TypeScript, every imported file tracked, unit tests (298 assertions across agent, vault, crypto and model suites)
+2. **Backend** — strict TypeScript, every imported file tracked, unit tests (13 suites, 453 checks across agent, vault, crypto, model, intelligence, neural and desktop-update suites)
 3. **Dependency audits** — backend + frontend, **fail on any high/critical vulnerability**
 4. **Black-box security pentest** — 44 live assertions against a booted server: auth bypass, hostile payloads, IDOR, stream integrity
 5. **Keyless boot proof** — the server must boot with zero provider keys
@@ -285,7 +379,7 @@ Every push to `main` runs the full pipeline in [`.github/workflows/ci.yml`](.git
 | | `latest` / `lite` | `full` |
 |---|---|---|
 | Homepage background | Nebula drift — animated WebGL | + 8 anime video themes |
-| Workspace/terminal background | Default Particles (three.js) + the NYC Subway ride | + 9 cinematic video themes |
+| Workspace/terminal background | Default Particles (three.js) + the NYC Subway ride + the Bioluminescent Ocean | + 9 cinematic video themes |
 | Image download | ~150 MB | ~470 MB |
 
 Both animate by default — the lite themes are GPU shaders, not static images. To get every theme:
@@ -301,8 +395,12 @@ Everything you make lives in Docker **named volumes**, safe across upgrades:
 - `enzo-projects` — generated coding projects
 - `enzo-skills` — skills the agent learned from GitHub repos
 - `enzo-memory` — the agent's durable notes about your work
+- `enzo-intelligence` — investigations, evidence ledgers and run history
+- `enzo-neural-engine` — your private preference profile and knowledge graph
 
 Your provider keys are **not** in the volumes — they're browser-side (encrypted at rest with your passphrase).
+
+The desktop apps keep the same things outside the app bundle, in `~/Library/Application Support/ENZO` (macOS) or `%APPDATA%\ENZO` (Windows). That is also why an in-app update can replace the whole bundle without touching your work.
 
 ## Optional configuration
 
@@ -333,8 +431,10 @@ docker build -t enzo:mine --build-arg THEME_VARIANT=full .
 
 This image is generated from the same codebase that runs https://enzo-hub.duckdns.org, with exactly two feature differences:
 
-1. **No Google sign-in.** The hosted site offers Google OAuth as a convenience; here, login *is* setting your provider keys. Everything else — providers, research, coding agent, vault, memory, skills — is identical.
+1. **No Google sign-in.** The hosted site offers Google OAuth as a convenience; here, login *is* setting your provider keys. Everything else — providers, research, coding agent, vault, memory, skills, Intelligence, Neural — is identical.
 2. **Default themes** (lite image). The first homepage and workspace themes run as pure WebGL/three.js so the image stays small. The `full` image has the complete set.
+
+The **one-click desktop apps ship this same variant** — the `.dmg` and `.exe` are the docker build (no Google sign-in, lite themes) with a bundled Node runtime, listening on port 5200. The Windows `full` edition is the same app with every theme enabled.
 
 ## Where ENZO has been mentioned
 
@@ -351,6 +451,10 @@ This image is generated from the same codebase that runs https://enzo-hub.duckdn
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
+
+## Feedback
+
+Found a bug, want a feature, or just want to say how ENZO is working out for you? [Tell me here](https://forms.gle/EV2EaAZySM8Tx1Wq7).
 
 ---
 

@@ -15,6 +15,7 @@ import {
   Satellite,
   Terminal,
   Train,
+  Waves,
 } from 'lucide-react'
 import { LimelightNav, type NavItem } from './ui/limelight-nav'
 import { WORKSPACE_THEMES } from '../themes/marketplace'
@@ -27,6 +28,7 @@ interface HeaderThemeSelectorProps {
 const THEME_META: Record<string, { icon: React.ReactElement; label: string; accent: string }> = {
   spring_day:     { icon: <Flower2 />,     label: 'Default Particles',  accent: '#4ade80' },
   nyc_subway:     { icon: <Train />,       label: 'NYC Subway Ride',    accent: '#e2e8f0' },
+  bioluminescent_ocean: { icon: <Waves />, label: 'Bioluminescent Ocean', accent: '#22d3ee' },
   alien_contact:  { icon: <Bot />,         label: 'Alien Contact',      accent: '#4ade80' },
   rocket:         { icon: <Orbit />,       label: 'Rocket Loop',        accent: '#fb923c' },
   space_probe:    { icon: <Satellite />,   label: 'Space Probe',        accent: '#38bdf8' },

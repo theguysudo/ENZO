@@ -18,6 +18,7 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createRequire } from 'node:module';
 import fs from 'fs';
 import net from 'net';
 import path from 'path';
@@ -25,7 +26,12 @@ import http from 'http';
 
 const PROJECTS_DIR = path.join(process.cwd(), 'generated-projects');
 
-const NODE_PATH = [path.join(process.cwd(), 'node_modules')]
+// Resolve through this module so worktrees whose dependencies are hoisted to the
+// primary checkout grant the directory Node actually loads packages from.
+const require = createRequire(import.meta.url);
+const INSTALLED_NODE_MODULES = path.dirname(path.dirname(require.resolve('express/package.json')));
+
+const NODE_PATH = [INSTALLED_NODE_MODULES]
   .concat(process.env.NODE_PATH ? process.env.NODE_PATH.split(path.delimiter) : [])
   .join(path.delimiter);
 
@@ -85,11 +91,9 @@ const IDLE_TIMEOUT_MS = Number(process.env.ENZO_PROJECT_RUNTIME_IDLE_MS || 10 * 
  * the permission model — that boundary still needs an OS/container sandbox
  * (see SECURITY.md "Runtime isolation roadmap").
  *
- * Probed once per process: on a node build without the flag (or an opt-out via
- * ENZO_RUNTIME_PERMISSIONS=0) the prefix is empty and children run as before.
- * A boot that fails with an access-denied error retries once without the
- * sandbox — a generated backend that legitimately needs an odd path must not
- * brick the preview, and the retry is logged.
+ * Probed once per process: on Node versions with a permission model, every child
+ * runs inside it unless the operator explicitly opts out via
+ * ENZO_RUNTIME_PERMISSIONS=0. Generated code never gets to downgrade itself.
  */
 const PERMISSIONS_DISABLED = process.env.ENZO_RUNTIME_PERMISSIONS === '0';
 
@@ -130,12 +134,20 @@ let sandboxPrefixCache: string[] | null = null;
 async function resolveSandboxFlags(): Promise<string[]> {
   if (PERMISSIONS_DISABLED) return [];
   if (sandboxPrefixCache) return sandboxPrefixCache;
-  if (!(await probeNodeArgs(['--permission']))) {
-    console.warn('[project-runtime] node lacks --permission — generated backends run WITHOUT the runtime sandbox');
-    sandboxPrefixCache = [];
-    return sandboxPrefixCache;
+
+  let flags: string[];
+  if (await probeNodeArgs(['--permission'])) {
+    flags = ['--permission'];
+  } else if (await probeNodeArgs(['--experimental-permission'])) {
+    flags = ['--experimental-permission'];
+  } else {
+    throw new Error('Node permission model unavailable; set ENZO_RUNTIME_PERMISSIONS=0 only in an external sandbox');
   }
-  const flags = ['--permission', '--allow-addons'];
+
+  // Newer Node releases gate native modules separately; older supported releases
+  // do not recognize this flag, so add it only when the runtime accepts it.
+  if (await probeNodeArgs([...flags, '--allow-addons'])) flags.push('--allow-addons');
+
   // Node >= 24 gates network under --permission too: without a net grant the
   // generated backend cannot even LISTEN on its ephemeral port. The grant is
   // all-or-nothing on current builds (egress stays possible — that boundary
@@ -144,9 +156,7 @@ async function resolveSandboxFlags(): Promise<string[]> {
     if (await probeListenArgs([...flags, '--allow-net'])) {
       flags.push('--allow-net');
     } else {
-      console.warn('[project-runtime] generated backends cannot listen under --permission on this node build — runtime sandbox disabled');
-      sandboxPrefixCache = [];
-      return sandboxPrefixCache;
+      throw new Error('Node permission model cannot start an isolated project backend');
     }
   }
   sandboxPrefixCache = flags;
@@ -165,7 +175,7 @@ export async function sandboxArgs(projectDir: string, tmpDir?: string): Promise<
   };
   const readRoots = new Set<string>([
     real(projectDir),
-    real(path.join(process.cwd(), 'node_modules')),
+    real(INSTALLED_NODE_MODULES),
     real('/etc'),
   ]);
   for (const p of NODE_PATH.split(path.delimiter)) {
@@ -177,13 +187,6 @@ export async function sandboxArgs(projectDir: string, tmpDir?: string): Promise<
   args.push(`--allow-fs-write=${real(projectDir)}`);
   if (tmpDir) args.push(`--allow-fs-write=${real(tmpDir)}`);
   return args;
-}
-
-const PERMISSION_ERROR_RE = /(ERR_ACCESS_DENIED|EACCES|EPERM|AccessDeniedError)/i;
-
-/** True when a failed boot's log looks like the sandbox denied a real need. */
-export function looksLikePermissionError(log: string): boolean {
-  return PERMISSION_ERROR_RE.test(log);
 }
 
 /** Candidate backend entries, most-preferred first. */
@@ -428,11 +431,7 @@ export async function ensureRuntime(projectId: string): Promise<Runtime | null> 
     }
   };
 
-  const sandboxLog = await bootAttempt(sandboxPrefix.length > 0);
-  if (sandboxPrefix.length > 0 && sandboxLog && looksLikePermissionError(sandboxLog)) {
-    console.warn(`[project-runtime] ${projectId} boot failed under the runtime-permission sandbox — retrying without it`);
-    await bootAttempt(false);
-  }
+  await bootAttempt(sandboxPrefix.length > 0);
   return rt;
 }
 

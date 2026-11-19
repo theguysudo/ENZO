@@ -30,3 +30,7 @@ src/models/*.json
 src/core/memory-store.json
 src/skills/skills
 src/skills/.skill-tmp
+# Intelligence + Neural Engine per-install state — same policy: never in an image.
+src/intelligence/data
+src/neural-engine/data
+src/graph-smoke-entry.tsx

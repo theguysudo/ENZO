@@ -19,6 +19,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Groq } from 'groq-sdk';
 import { searchWeb } from '../agent/search.js';
+import { attributionHeaders } from '../core/attribution.js';
 
 // Per-model deep info, web-sourced and refreshed daily. Works for models from
 // ANY provider (OpenRouter/Groq/NVIDIA/HF/Pollinations/…) because it searches
@@ -130,7 +131,7 @@ async function synthesize(
 
   if (keys.groq) {
     try {
-      const groq = new Groq({ apiKey: keys.groq });
+      const groq = new Groq({ apiKey: keys.groq, defaultHeaders: attributionHeaders() });
       const c = await groq.chat.completions.create({
         model: 'openai/gpt-oss-20b', temperature: 0.2, max_tokens: 900, // live-verified json mode (2026-09-06) — llama-3.3-70b delisted
         response_format: { type: 'json_object' }, messages,

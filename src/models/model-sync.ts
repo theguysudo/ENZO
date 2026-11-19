@@ -42,6 +42,7 @@ import { fileURLToPath } from 'url';
 import { acquireProvider } from '../models/throttle.js';
 import { getHealthStore } from '../models/health.js';
 import { refreshCloudflareAccessToken } from '../core/env-manager.js';
+import { attributionHeaders } from '../core/attribution.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CACHE_PATH = path.join(__dirname, 'model-cache.json');
@@ -224,7 +225,7 @@ function formatPollPrice(n: number): string {
 async function fetchOpenRouterModels(): Promise<CatalogModel[]> {
   const res = await withRetry(() =>
     fetchWithTimeout('https://openrouter.ai/api/v1/models', {
-      headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0' },
+      headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', ...attributionHeaders()  },
     })
   );
   if (!res.ok) throw new HttpStatusError(res.status, `OpenRouter fetch failed: ${res.status}`);
@@ -302,7 +303,7 @@ const GROQ_META: Record<string, { name: string; desc: string; maxOut: number }> 
 async function fetchGroqModels(apiKey: string): Promise<CatalogModel[]> {
   const res = await withRetry(() =>
     fetchWithTimeout('https://api.groq.com/openai/v1/models', {
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: { ...attributionHeaders(), Authorization: `Bearer ${apiKey}` },
     })
   );
   if (!res.ok) throw new HttpStatusError(res.status, `Groq fetch failed: ${res.status}`);
@@ -681,7 +682,7 @@ interface Llm7RawModel {
 async function fetchLlm7Models(): Promise<CatalogModel[]> {
   const res = await withRetry(() =>
     fetchWithTimeout(`${llm7BaseUrl()}/models`, {
-      headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', Accept: 'application/json' },
+      headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', ...attributionHeaders(), Accept: 'application/json'  },
     })
   );
   if (!res.ok) throw new HttpStatusError(res.status, `LLM7 fetch failed: ${res.status}`);
@@ -831,7 +832,7 @@ async function fetchGoogleModels(googleKey?: string): Promise<CatalogModel[]> {
 
   const res = await withRetry(() =>
     fetchWithTimeout(`${GOOGLE_DEFAULT_BASE}/models`, {
-      headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', Accept: 'application/json', Authorization: `Bearer ${key}` },
+      headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', ...attributionHeaders(), Accept: 'application/json', Authorization: `Bearer ${key }` },
     })
   );
   if (!res.ok) throw new HttpStatusError(res.status, `Google fetch failed: ${res.status}`);
@@ -977,7 +978,7 @@ function puterPrice(cents: any): string {
 async function fetchPuterModels(): Promise<CatalogModel[]> {
   const res = await withRetry(() =>
     fetchWithTimeout('https://api.puter.com/puterai/chat/models/details', {
-      headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', Accept: 'application/json' },
+      headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', ...attributionHeaders(), Accept: 'application/json'  },
     })
   );
   if (!res.ok) throw new HttpStatusError(res.status, `Puter fetch failed: ${res.status}`);
@@ -1079,7 +1080,7 @@ const CLOUDFLARE_API_BASE = 'https://api.cloudflare.com/client/v4';
 /** Auto-discover the caller's account id from the token (accounts endpoint). */
 async function resolveCloudflareAccountId(key: string): Promise<string> {
   const res = await fetchWithTimeout(`${CLOUDFLARE_API_BASE}/accounts`, {
-    headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', Accept: 'application/json', Authorization: `Bearer ${key}` },
+    headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', ...attributionHeaders(), Accept: 'application/json', Authorization: `Bearer ${key }` },
   });
   if (!res.ok) throw new HttpStatusError(res.status, `Cloudflare accounts fetch failed: ${res.status}`);
   let data: { success?: unknown; result?: unknown };
@@ -1148,7 +1149,7 @@ async function probeCloudflarePlanTier(key: string, accountId: string, paidOnlyI
     const res = await fetch(`${CLOUDFLARE_API_BASE}/accounts/${encodeURIComponent(accountId)}/ai/v1/chat/completions`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      headers: { 'Content-Type': 'application/json', ...attributionHeaders(), 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({ model: paidOnlyId, messages: [{ role: 'user', content: 'hi' }], max_tokens: 1 }),
     });
     if (res.status === 200) return 'paid';
@@ -1178,7 +1179,7 @@ async function fetchCloudflareModels(cfToken?: string, cfAccount?: string): Prom
 
   let res = await withRetry(() =>
     fetchWithTimeout(`${CLOUDFLARE_API_BASE}/accounts/${encodeURIComponent(accountId)}/ai/models/search`, {
-      headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', Accept: 'application/json', Authorization: `Bearer ${key}` },
+      headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', ...attributionHeaders(), Accept: 'application/json', Authorization: `Bearer ${key }` },
     })
   );
   // OAuth-granted access tokens are short-lived — on 401/403, mint a fresh one
@@ -1187,7 +1188,7 @@ async function fetchCloudflareModels(cfToken?: string, cfAccount?: string): Prom
     const fresh = await refreshCloudflareAccessToken();
     if (fresh) {
       res = await fetchWithTimeout(`${CLOUDFLARE_API_BASE}/accounts/${encodeURIComponent(accountId)}/ai/models/search`, {
-        headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', Accept: 'application/json', Authorization: `Bearer ${fresh}` },
+        headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', ...attributionHeaders(), Accept: 'application/json', Authorization: `Bearer ${fresh }` },
       });
     }
   }
@@ -1857,7 +1858,7 @@ async function probeNvidiaModel(modelId: string, key: string): Promise<'ok' | 'b
     const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      headers: { 'Content-Type': 'application/json', ...attributionHeaders(), 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
         model: modelId,
         messages: [{ role: 'user', content: 'hi' }],
@@ -2014,7 +2015,7 @@ async function probeLlm7Model(modelId: string, key: string): Promise<'ok' | 'bad
     const res = await fetch(`${llm7BaseUrl()}/chat/completions`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+      headers: { 'Content-Type': 'application/json', ...attributionHeaders(), 'Authorization': `Bearer ${key}` },
       body: JSON.stringify({
         model: modelId,
         messages: [
@@ -2391,7 +2392,7 @@ async function fetchNvidiaModels(nvidiaKey?: string): Promise<CatalogModel[]> {
     try {
       const res = await withRetry(() =>
         fetchWithTimeout('https://build.nvidia.com/models.md', {
-          headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0' }
+          headers: { 'User-Agent': 'ENZO-AI-Tunnel/1.0', ...attributionHeaders()  }
         })
       );
       if (res.ok) {

@@ -25,6 +25,10 @@ labeled "total". The fix is a persistent per-day record:
   traffic/unique-clones.json — same, cloners
   traffic/docker-pulls.json — ghcr pull count, scraped from the public
                               package page (no token needed)
+  traffic/app-downloads.json — how many times the desktop application was
+                              downloaded: the summed download_count of every
+                              release asset that IS an installer (.dmg/.exe),
+                              read from the public releases API
 
 Badge URL shape: https://img.shields.io/endpoint?url=<raw-file-url>
 
@@ -54,6 +58,10 @@ PACKAGE = "enzo"
 API_REPO = f"https://api.github.com/repos/{REPO}"
 API = f"{API_REPO}/traffic"
 PACKAGE_PAGE = f"https://github.com/users/{OWNER}/packages/container/package/{PACKAGE}"
+# Only these count as "the application was downloaded" — the macOS disk image
+# and the Windows installer. Source archives and anything else attached to a
+# release are not application downloads.
+APP_ASSET_SUFFIXES = (".dmg", ".exe")
 REQ_HEADERS = {
     "Accept": "application/vnd.github+json",
     "User-Agent": "traffic-render",
@@ -93,6 +101,36 @@ def fetch_docker_pulls():
     if not m:
         return None
     return int(m.group(1).replace(",", ""))
+
+
+def fetch_app_downloads():
+    """Count how many times the desktop application was downloaded.
+
+    GitHub's releases API exposes a per-asset `download_count`, and the
+    endpoint is public for a public repo (no token required). We sum the
+    counts of the assets that ARE the application — the macOS .dmg and the
+    Windows .exe — across every release, so the badge tracks real installer
+    downloads rather than anything else attached to a release.
+
+    Returns (total, breakdown) where breakdown is [(asset_name, count), …]
+    sorted by count descending, or None when the fetch fails (the caller
+    then keeps the previous number — never a fake zero).
+    """
+    releases = get("/releases?per_page=100", base=API_REPO)
+    if not isinstance(releases, list):
+        return None
+    total = 0
+    breakdown = []
+    for rel in releases:
+        for asset in rel.get("assets", []) or []:
+            name = asset.get("name", "")
+            if not name.lower().endswith(APP_ASSET_SUFFIXES):
+                continue
+            count = int(asset.get("download_count", 0) or 0)
+            total += count
+            breakdown.append((name, count))
+    breakdown.sort(key=lambda pair: pair[1], reverse=True)
+    return total, breakdown
 
 
 def load_prev(*paths):
@@ -145,11 +183,14 @@ def main():
     referrers = None
     stars = None
     pulls = None
+    app_downloads = None
+    app_breakdown = []
     for name, fn in (("views", lambda: get("/views")),
                      ("clones", lambda: get("/clones")),
                      ("referrers", lambda: get("/popular/referrers")),
                      ("repo", lambda: get("", base=API_REPO)),
-                     ("pulls", fetch_docker_pulls)):
+                     ("pulls", fetch_docker_pulls),
+                     ("app-downloads", fetch_app_downloads)):
         try:
             data = fn()
             ok_any = True
@@ -163,6 +204,8 @@ def main():
                 stars = data.get("stargazers_count")
             elif name == "pulls":
                 pulls = data
+            elif name == "app-downloads":
+                app_downloads, app_breakdown = data
         except urllib.error.HTTPError as e:
             # Surface the response body — GitHub puts the real reason there
             # ("Resource not accessible by integration", rate limit, …).
@@ -181,7 +224,8 @@ def main():
 
     prev_badges = load_prev("traffic/total-views.json", "traffic/unique-views.json",
                             "traffic/total-clones.json", "traffic/unique-clones.json",
-                            "traffic/stars.json", "traffic/docker-pulls.json")
+                            "traffic/stars.json", "traffic/docker-pulls.json",
+                            "traffic/app-downloads.json")
 
     # ── persistent per-day history → true all-time totals ───────────────────
     hist = load_history()
@@ -251,6 +295,17 @@ def main():
                        "message": f"{pulls_out}", "color": color(pulls_out)}, f, indent=2)
         print(f"traffic/docker-pulls.json -> {pulls_out}")
 
+    # App downloads: how many times the .dmg/.exe installers were downloaded.
+    # A failed fetch keeps the previous number (never a fake zero).
+    app_out = app_downloads if app_downloads is not None else prev_badges["traffic/app-downloads.json"]
+    if app_out is not None:
+        with open("traffic/app-downloads.json", "w") as f:
+            json.dump({"schemaVersion": 1, "label": "app downloads",
+                       "message": f"{app_out}", "color": color(app_out)}, f, indent=2)
+        print(f"traffic/app-downloads.json -> {app_out}")
+        for asset_name, asset_count in app_breakdown:
+            print(f"  {asset_name}: {asset_count}")
+
     now = datetime.now(timezone.utc)
     stamp = now.strftime("%Y-%m-%d")
     week_label = f"{now.year}-W{now.isocalendar()[1]:02d}"
@@ -279,6 +334,16 @@ def main():
     if pulls_out is not None:
         table += f"Docker pulls ([ghcr.io/{OWNER}/{PACKAGE}]"
         table += f"(https://github.com/{REPO}/pkgs/container/{PACKAGE})): **{pulls_out}**\n\n"
+    if app_out is not None:
+        table += (f"App downloads (the .dmg / .exe installers on the "
+                  f"[releases page](https://github.com/{REPO}/releases)): "
+                  f"**{app_out}**\n\n")
+        if app_breakdown:
+            table += ("| Installer | Downloads |\n|---|---|\n"
+                      + "".join(f"| `{n}` | {c} |\n" for n, c in app_breakdown)
+                      + "\n")
+            table += ("One download is one fetch of one installer file — the same\n"
+                      "person can download both the macOS and the Windows build.\n\n")
     table += ("All-time totals are the sum of the persistent per-day record in\n"
               "[`traffic/history.json`](traffic/history.json) — days stay in the record\n"
               "after GitHub's 14-day window slides past them. Unique counts are windowed\n"

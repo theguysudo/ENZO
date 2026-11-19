@@ -25,7 +25,7 @@ import net from 'net';
 import os from 'os';
 import path from 'path';
 
-import { backendNodePath, buildChildEnv, sandboxArgs, looksLikePermissionError } from '../projects/project-runtime';
+import { backendNodePath, buildChildEnv, sandboxArgs } from '../projects/project-runtime';
 
 const execFileAsync = promisify(execFile);
 
@@ -191,9 +191,7 @@ export async function bootCheckBackend(files: FileEntry[]): Promise<BackendBoot>
   // no node_modules and silently broke module resolution for boot checks).
   const childEnv = buildChildEnv(port, backendNodePath());
   // Same runtime-permission sandbox as the live project-runtime spawn — a
-  // backend that boots here must behave exactly as it will behind the proxy,
-  // sandbox included. A permission-denied boot retries once without the
-  // sandbox so a genuinely path-hungry backend still passes the check.
+  // backend that boots here must behave exactly as it will behind the proxy.
   const sandboxPrefix = await sandboxArgs(scratch, os.tmpdir());
 
   const BOOT_TIMEOUT_MS = 8000;
@@ -236,11 +234,7 @@ export async function bootCheckBackend(files: FileEntry[]): Promise<BackendBoot>
   };
 
   try {
-    let result = await attempt(sandboxPrefix.length > 0);
-    if (!result.ok && sandboxPrefix.length > 0 && looksLikePermissionError(result.log)) {
-      console.warn('[build-verify] boot check failed under the runtime-permission sandbox — retrying without it');
-      result = await attempt(false);
-    }
+    const result = await attempt(sandboxPrefix.length > 0);
     return { ok: result.ok, detail: result.detail };
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });

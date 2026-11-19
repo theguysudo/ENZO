@@ -395,7 +395,7 @@ function AgentList({
             ) : (
               <button
                 onClick={() => setConfirmId(a.id)}
-                className="shrink-0 text-white/25 opacity-0 transition group-hover:opacity-100 hover:text-red-400"
+                className="shrink-0 text-white/60 opacity-0 transition group-hover:opacity-100 hover:text-red-400"
                 aria-label="Delete agent"
               >
                 ✕
@@ -593,10 +593,10 @@ function CreateAgentModal({
       {/* Step indicator */}
       <div className="mb-6 flex items-center gap-3 font-mono-display text-[10px] uppercase tracking-[0.25em]">
         {(['Describe', 'Review', 'Test'] as const).map((label, i) => (
-          <div key={label} className={`flex items-center gap-2 ${step === i + 1 ? 'text-white' : 'text-white/30'}`}>
+          <div key={label} className={`flex items-center gap-2 ${step === i + 1 ? 'text-white' : 'text-white/60'}`}>
             <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${step === i + 1 ? 'border-white/60 bg-white/10' : 'border-white/15'}`}>{i + 1}</span>
             {label}
-            {i < 2 && <span className="ml-1 text-white/20">—</span>}
+            {i < 2 && <span className="ml-1 text-white/45">—</span>}
           </div>
         ))}
       </div>
@@ -674,7 +674,7 @@ function CreateAgentModal({
               <label className="font-mono-display text-[10px] uppercase tracking-[0.25em] text-white/55">
                 Expert manual (system prompt)
               </label>
-              <span className="font-mono text-[10px] text-white/30">{systemPrompt.length}/8000</span>
+              <span className="font-mono text-[10px] text-white/60">{systemPrompt.length}/8000</span>
             </div>
             <textarea
               value={systemPrompt}
@@ -999,7 +999,7 @@ function AgentRunChat({
             )}
           </div>
         ))}
-        {running && <div className="font-mono-display text-[10px] uppercase tracking-wider text-white/30">working…</div>}
+        {running && <div className="font-mono-display text-[10px] uppercase tracking-wider text-white/60">working…</div>}
       </div>
       <div className="mt-3 flex gap-2">
         <input
@@ -1189,7 +1189,7 @@ function AgentDetail({
                 {agent.memory.map((m, i) => (
                   <div key={i} className="group flex items-start justify-between gap-3 rounded-xl border border-white/15 bg-black/20 p-3">
                     <span className="text-xs text-white/85">{m}</span>
-                    <button onClick={() => void delMemory(i)} className="shrink-0 text-white/20 opacity-0 transition group-hover:opacity-100 hover:text-red-400" aria-label="Forget">✕</button>
+                    <button onClick={() => void delMemory(i)} className="shrink-0 text-white/60 opacity-0 transition group-hover:opacity-100 hover:text-red-400" aria-label="Forget">✕</button>
                   </div>
                 ))}
               </div>
@@ -1230,7 +1230,7 @@ function AgentDetail({
                 {agent.knowledge.map((k, i) => (
                   <div key={i} className="group flex items-start justify-between gap-3 rounded-xl border border-white/15 bg-black/20 p-3">
                     <span className="text-xs text-white/85">{k}</span>
-                    <button onClick={() => void delKnowledge(i)} className="shrink-0 text-white/20 opacity-0 transition group-hover:opacity-100 hover:text-red-400" aria-label="Remove note">✕</button>
+                    <button onClick={() => void delKnowledge(i)} className="shrink-0 text-white/60 opacity-0 transition group-hover:opacity-100 hover:text-red-400" aria-label="Remove note">✕</button>
                   </div>
                 ))}
               </div>

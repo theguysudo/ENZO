@@ -23,7 +23,7 @@ import {
   stopAllRuntimes,
 } from '../src/projects/project-runtime.js';
 
-async function get(port: number, urlPath: string, token?: string): Promise<{ status: number; location?: string; body: string; type?: string }> {
+async function get(port: number, urlPath: string, token?: string): Promise<{ status: number; location?: string; body: string; type?: string; csp?: string }> {
   return new Promise((resolve, reject) => {
     http
       .get({ host: '127.0.0.1', port, path: urlPath, headers: token ? { 'x-vault-token': token } : {} }, (res) => {
@@ -34,6 +34,9 @@ async function get(port: number, urlPath: string, token?: string): Promise<{ sta
             status: res.statusCode || 0,
             location: res.headers.location,
             type: res.headers['content-type'],
+            csp: Array.isArray(res.headers['content-security-policy'])
+              ? res.headers['content-security-policy'][0]
+              : res.headers['content-security-policy'],
             body,
           }),
         );
@@ -77,6 +80,8 @@ async function main() {
         '<!DOCTYPE html><html><head><link rel="stylesheet" href="css/styles.css"></head>' +
         '<body><main>LinkVault fixture</main></body></html>',
       'public/css/styles.css': 'body { color: #eee; }',
+      'secondary.html': '<script>document.body.dataset.pwned = localStorage.length</script>',
+      'icon.svg': '<svg xmlns="http://www.w3.org/2000/svg"><script>document.body.dataset.pwned=1</script></svg>',
       'server.js': serverJs,
     },
     'project-fix fixture',
@@ -98,19 +103,37 @@ async function main() {
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
   const port = (srv.address() as net.AddressInfo).port;
 
-  const root = await get(port, `/api/project/${saved.id}/`, saved.ownerToken);
+  const root = await get(port, `/api/project/${saved.id}/`, testToken);
   assert.strictEqual(root.status, 302, 'project root redirects when entry is nested');
   assert.strictEqual(root.location, `/api/project/${saved.id}/public/`, 'redirect points at entry dir');
 
-  const page = await get(port, root.location!, saved.ownerToken);
+  const page = await get(port, root.location!, testToken);
   assert.strictEqual(page.status, 200);
   assert.ok(page.body.includes('window.ENZO_BACKEND'), 'entry page gets backend bootstrap injected');
   assert.ok(page.body.includes(`/api/project/${saved.id}/backend`), 'bootstrap carries the proxy base');
 
-  const css = await get(port, `/api/project/${saved.id}/public/css/styles.css`, saved.ownerToken);
-  assert.strictEqual(css.status, 200, 'relative assets resolve from nested entry dir');
-  assert.ok(String(css.type).includes('text/css'));
-  console.log('✔ nested public/ frontend previews with working assets + backend base');
+  assert.ok(String(page.csp).includes('sandbox'), 'nested entry page gets enforcing sandbox CSP');
+
+  const secondaryHtml = await get(port, `/api/project/${saved.id}/secondary.html`);
+  assert.strictEqual(secondaryHtml.status, 200, 'secondary HTML remains a shareable project asset');
+  assert.ok(String(secondaryHtml.csp).includes('sandbox'), 'secondary HTML gets enforcing sandbox CSP');
+  const secondarySvg = await get(port, `/api/project/${saved.id}/icon.svg`);
+  assert.strictEqual(secondarySvg.status, 200, 'SVG remains a shareable project asset');
+  assert.ok(String(secondarySvg.csp).includes('sandbox'), 'scriptable SVG gets enforcing sandbox CSP');
+
+  const privateManifest = await get(port, `/api/project/${saved.id}/manifest.json`);
+  assert.strictEqual(privateManifest.status, 404, 'internal manifest is never a public project asset');
+  assert.ok(!privateManifest.body.includes(testToken), 'manifest response cannot leak the vault token');
+  const manifestOnDisk = JSON.parse(fs.readFileSync(path.join(base, 'manifest.json'), 'utf8'));
+  assert.strictEqual(manifestOnDisk.ownerToken, undefined, 'vault token is not persisted in the project manifest');
+  assert.strictEqual((saved as any).ownerToken, undefined, 'save response does not echo the vault token');
+
+  fs.mkdirSync(path.join(base, 'data'), { recursive: true });
+  fs.writeFileSync(path.join(base, 'data', 'app.db'), 'PRIVATE-DB-SENTINEL');
+  const privateDb = await get(port, `/api/project/${saved.id}/data/app.db`);
+  assert.strictEqual(privateDb.status, 404, 'runtime database is never a public project asset');
+  assert.ok(!privateDb.body.includes('PRIVATE-DB-SENTINEL'), 'database contents are not disclosed');
+
 
   // ── 4. Real runtime boot through the sanitized backend ──────────────────
   await ensureRuntime(saved.id);
@@ -123,7 +146,7 @@ async function main() {
 
   // The proxy route is behind requireProjectOwnership, so it needs the token the
   // browser sends; the `direct` call above bypasses the router entirely.
-  const proxied = await get(port, `/api/project/${saved.id}/backend/api/items`, saved.ownerToken);
+  const proxied = await get(port, `/api/project/${saved.id}/backend/api/items`, testToken);
   assert.strictEqual(proxied.status, 200, 'proxy path forwards to the runtime');
   console.log('✔ sanitized backend boots under Express 5 and answers through the proxy');
 

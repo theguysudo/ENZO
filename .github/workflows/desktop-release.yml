@@ -1,0 +1,61 @@
+# Desktop installers — one-click builds for non-technical users.
+#
+# Manual: Actions → Desktop installers → Run workflow.
+# Tag push (v*): also attaches the artifacts to the GitHub release.
+#
+# NOTE: pushing workflow files to the public repo needs the ADITYADUBEY2023
+# token (theguysudo's active token lacks the `workflow` scope).
+# macOS builds are ad-hoc signed (no developer cert) → right-click → Open on
+# first launch. Windows builds are unsigned → SmartScreen → More info → Run.
+
+name: Desktop installers
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Build DMG
+        run: bash desktop/package-macos.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: desktop/dist/*.dmg
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: gh release upload "$GITHUB_REF_NAME" desktop/dist/*.dmg --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Build installer (less theme)
+        shell: pwsh
+        run: powershell -File desktop/package-windows.ps1 less
+      - name: Build installer (full theme)
+        shell: pwsh
+        run: powershell -File desktop/package-windows.ps1 full
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-setups
+          path: desktop/dist/*.exe
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: gh release upload "$GITHUB_REF_NAME" desktop/dist/*.exe --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

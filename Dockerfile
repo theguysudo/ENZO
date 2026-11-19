@@ -45,7 +45,8 @@ COPY synthetic-nature/ ./
 # deleted BEFORE the build so vite's copy of public/ → dist/ stays small too.
 RUN if [ "$THEME_VARIANT" = "lite" ]; then \
       find public/background_elements -name '*.mp4' \
-        ! -name 'Subway_doors_and_tunnel_view_202609111948_gwr_loop.mp4' -delete; \
+        ! -name 'Subway_doors_and_tunnel_view_202609111948_gwr_loop.mp4' \
+        ! -name 'Bioluminescent_ocean.mp4' -delete; \
     fi
 # VITE_* flags are statically replaced at build time (see src/lib/variant.ts):
 # GOOGLE_AUTH=false dead-code-eliminates the Google login branch entirely.
@@ -91,7 +92,10 @@ COPY --from=frontend-build --chown=node:node /build/synthetic-nature/dist ./synt
 # vault-boot.ts also writes here: the instance master key (vault-boot.json,
 # 0o600) and sealed claimed provider keys (vault-keys.json) — generated on
 # first boot, persisted in the enzo-memory volume, never baked into the image.
-RUN mkdir -p data generated-projects src/skills/skills \
+# src/intelligence/data + src/neural-engine/data are pre-created node-owned so
+# a named volume mounted there inherits that ownership — if Docker creates the
+# mountpoint itself, it comes up root-owned and every write EACCESses.
+RUN mkdir -p data generated-projects src/skills/skills src/intelligence/data src/neural-engine/data \
  && echo '{ "entries": [] }' > data/memory-store.json \
  && ln -s /app/data/memory-store.json src/core/memory-store.json
 

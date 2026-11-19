@@ -19,6 +19,7 @@ import { buildMemoryContext } from '../core/memory.js';
 import { isSelfHostedInstance } from '../core/vault-boot.js';
 import { buildSkillContext } from '../skills/skills.js';
 import { getModelHealth } from '../models/health.js';
+import { attributionHeaders } from '../core/attribution.js';
 
 // ── Master Key ───────────────────────────────────────────────────────────────
 // No hardcoded fallback: when ENZO_MASTER_KEY is unset, strict auth fails closed.
@@ -105,6 +106,51 @@ function customEndpoint(): string {
     .trim()
     .replace(/\/+$/, '');
   return base ? `${base}/chat/completions` : '';
+}
+
+// ── NVIDIA endpoint pinning ─────────────────────────────────────────────────
+// The NVIDIA base URL can arrive from two places: the operator's own
+// environment (NVIDIA_API_BASE_URL, trusted) and a request header
+// (x-nvidia-base-url, NOT trusted). A caller-controlled base URL would send
+// that caller's NVIDIA key to a host of their choosing — a key-exfiltration
+// path. Only NVIDIA's public API host is allowed, plus the operator's own
+// configured host when one is set.
+const NVIDIA_PUBLIC_HOST = 'integrate.api.nvidia.com';
+
+function nvidiaAllowedHosts(): Set<string> {
+  const hosts = new Set<string>([NVIDIA_PUBLIC_HOST]);
+  const env = process.env.NVIDIA_API_BASE_URL || '';
+  if (env) {
+    try {
+      hosts.add(new URL(env).hostname.toLowerCase());
+    } catch {
+      // an unparseable operator value is simply not allowed
+    }
+  }
+  return hosts;
+}
+
+/** Resolve the NVIDIA chat-completions endpoint, rejecting anything that is
+ *  not HTTPS on an allowed host. No credentials, query or fragment. */
+export function resolveNvidiaEndpoint(raw: unknown): string {
+  const base = String(raw || `https://${NVIDIA_PUBLIC_HOST}/v1`).trim();
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch {
+    throw new RouteError('Invalid NVIDIA base URL');
+  }
+  if (
+    url.protocol !== 'https:' ||
+    !nvidiaAllowedHosts().has(url.hostname.toLowerCase()) ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  ) {
+    throw new RouteError('Untrusted NVIDIA base URL');
+  }
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}/chat/completions`;
 }
 
 type Provider = keyof typeof PROVIDER_ENDPOINTS;
@@ -205,11 +251,11 @@ function parseModelRoute(modelString: string, req: Request): ParsedRoute {
         if (req.headers['x-nvidia-key']) {
           apiKey = String(req.headers['x-nvidia-key']);
         }
-        if (req.headers['x-nvidia-base-url']) {
-          endpoint = `${String(req.headers['x-nvidia-base-url'])}/chat/completions`;
-        } else if (process.env.NVIDIA_API_BASE_URL) {
-          endpoint = `${process.env.NVIDIA_API_BASE_URL}/chat/completions`;
-        }
+        // The base URL is pinned to NVIDIA's host (or the operator's own
+        // configured host). A caller-supplied host would receive the key.
+        endpoint = resolveNvidiaEndpoint(
+          req.headers['x-nvidia-base-url'] || process.env.NVIDIA_API_BASE_URL,
+        );
       } else if (provider === 'llm7') {
         if (req.headers['x-llm7-key']) {
           apiKey = String(req.headers['x-llm7-key']);
@@ -310,12 +356,8 @@ function buildUpstreamHeaders(route: ParsedRoute): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${bearerKey}`,
+    ...attributionHeaders(),
   };
-
-  if (route.provider === 'openrouter') {
-    headers['HTTP-Referer'] = 'https://enzo-unified.local';
-    headers['X-Title'] = 'ENZO Unified AI Tunnel';
-  }
 
   return headers;
 }

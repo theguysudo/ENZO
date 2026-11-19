@@ -27,7 +27,11 @@ import {
 import { vaultTokenIsValid } from '../core/vault-token.js';
 import { rateLimit } from '../core/rate-limit.js';
 
-const PROJECTS_DIR = path.join(process.cwd(), 'generated-projects');
+// ENZO_PROJECTS_DIR relocates generated projects for desktop installs (the
+// .app bundle is read-only); default stays cwd-relative (docker/local runs).
+const PROJECTS_DIR = process.env.ENZO_PROJECTS_DIR
+  ? path.resolve(process.env.ENZO_PROJECTS_DIR)
+  : path.join(process.cwd(), 'generated-projects');
 const MAX_FILES = 60;
 const MAX_FILE_BYTES = 3_000_000;
 
@@ -116,6 +120,20 @@ function isRuntimeArtifact(relPath: string): boolean {
   return /(\.db|\.sqlite|\.sqlite3|\.db-wal|-wal|-shm|\.journal)$/.test(relPath.toLowerCase());
 }
 
+/** Files owned by ENZO or a generated backend, never public preview assets. */
+function isInternalProjectFile(relPath: string): boolean {
+  return relPath === 'manifest.json' || isRuntimeArtifact(relPath);
+}
+
+/** Every document ENZO serves from a project gets an opaque origin. */
+const PROJECT_DOCUMENT_CSP = 'sandbox allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock';
+
+/** HTML and SVG can execute script when opened directly — they need the
+ *  sandbox CSP too, not just the designated entry page. */
+function isActiveDocument(relPath: string): boolean {
+  return /\.(?:html?|svg)$/i.test(relPath);
+}
+
 /** Read a saved project's files from disk (used to hand "continue"-intent coding
  *  requests the AUTHORITATIVE current project state so the model extends the
  *  real files instead of restarting from scratch). Bounded to the same caps as
@@ -159,7 +177,6 @@ export interface SavedProject {
   url: string;
   files: { path: string; size: number }[];
   backend?: { entry: string; base: string };
-  ownerToken?: string; // Vault session token of the project owner
 }
 
 // Device identity bound into project ownership (see checkProjectOwnership).
@@ -200,7 +217,7 @@ export async function saveProject(
   files: Record<string, string>,
   title?: string,
   id?: string,
-  ownerToken?: string,
+  _ownerToken?: string,
   ownerId?: string,
 ): Promise<SavedProject> {
   // Use lock to prevent race conditions during project creation/upsert
@@ -253,19 +270,17 @@ export async function saveProject(
     title: title ? String(title).slice(0, 80) : 'ENZO Project',
     url: `/api/project/${projectId}/`,
     files: listFiles(projectId),
-    ownerToken
   };
   if (backendEntry) {
     result.backend = { entry: backendEntry, base: `/api/project/${projectId}/backend` };
   }
-  // Write manifest.json with ownerToken + ownerId. Claim semantics: an update
-  // never clobbers a recorded owner — the first authorized update of a legacy
-  // or anonymous-created project is what records one.
+  // Persist only the device owner. Vault tokens are live bearer credentials;
+  // ownership validates the caller's current token independently.
   const manifestOwner = ownerId ?? readManifestOwnerId(projectId) ?? undefined;
   const manifestPath = path.join(base, 'manifest.json');
   fs.writeFileSync(
     manifestPath,
-    JSON.stringify({ ownerToken, ownerId: manifestOwner, title: result.title, id: projectId }, null, 2),
+    JSON.stringify({ ownerId: manifestOwner, title: result.title, id: projectId }, null, 2),
   );
   return result;
   });
@@ -489,7 +504,7 @@ function serveIndex(id: string, res: any) {
   // PreviewPanel); this response header gives the open-in-new-tab path the
   // same opaque-origin isolation, so LLM-generated code never runs on our
   // origin with access to the app's storage.
-  res.setHeader('Content-Security-Policy', 'sandbox allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock');
+  res.setHeader('Content-Security-Policy', PROJECT_DOCUMENT_CSP);
   res.send(injectBackendBootstrap(id, html, !!findBackendEntry(id)));
 }
 
@@ -539,6 +554,13 @@ projectRouter.get('/api/project/:id/*splat', (req: any, res: any) => {
   const id = String(req.params.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
   let rel = Array.isArray(req.params.splat) ? req.params.splat.join('/') : String(req.params.splat || '');
   if (rel.endsWith('/')) rel += 'index.html'; // directory URL → its index page
+  // ENZO's own files and the generated backend's runtime data are never public
+  // preview assets — the manifest carries ownership, the databases carry user
+  // data. Both are 404, not 403: they should not even look like they exist.
+  if (isInternalProjectFile(rel)) {
+    res.status(404).type('text/plain').send('File not found in project.');
+    return;
+  }
   const content = id && rel ? readProjectFile(id, rel) : null;
   if (content === null) {
     res.status(404).type('text/plain').send('File not found in project.');
@@ -552,9 +574,14 @@ projectRouter.get('/api/project/:id/*splat', (req: any, res: any) => {
   if (entry && rel === entry) {
     // Same opaque-origin isolation as the index route: this entry page may
     // open full-screen in a new tab.
-    res.setHeader('Content-Security-Policy', 'sandbox allow-scripts allow-forms allow-modals allow-popups allow-pointer-lock');
+    res.setHeader('Content-Security-Policy', PROJECT_DOCUMENT_CSP);
     res.send(injectBackendBootstrap(id, content, !!findBackendEntry(id)));
     return;
+  }
+  // Any other HTML/SVG can execute when opened directly — give it the same
+  // opaque origin, not just the designated entry page.
+  if (isActiveDocument(rel)) {
+    res.setHeader('Content-Security-Policy', PROJECT_DOCUMENT_CSP);
   }
   res.send(content);
   });

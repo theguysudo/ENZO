@@ -157,6 +157,18 @@ script, "learn this repo" becomes remote code execution.
   window is still accepted, so a token never dies mid-session. It has no
   per-session nonce, so revoking one browser means rotating the underlying key —
   the upgrade path is a token table, noted in the code.
+- **Chat itself is open, but the instance-wide surfaces are not.** A chat request
+  without a vault session still works (the browser holds the provider key), but
+  the memory and skill commands, the agent's memory context, the learned-skill
+  context, the Gmail/Calendar connection state and the **neural research
+  profile** require vault access. The neural profile is bound to an owner id
+  that travels in a plain header (`x-enzo-owner`): without the vault check, an
+  anonymous caller could read another owner's profile through the model's context
+  and write inferred preferences into their file.
+- **A provider key can only be sent to that provider.** The NVIDIA base URL may
+  be overridden per request, which would otherwise send the caller's key to a
+  host of their choosing. It is now pinned to NVIDIA's endpoint (or the one the
+  operator configured) — https only, no credentials, no query string.
 - **Google sign-in fails closed.** With `JWT_SECRET` unset, the three auth routes
   return `503` with a setup message. There is no fallback secret; a hardcoded one
   would let anyone forge a valid token. `jwt.verify` pins
@@ -173,6 +185,36 @@ script, "learn this repo" becomes remote code execution.
   cross-site `fetch` cannot set without triggering a preflight that CORS blocks.
 - **The Vault API returns masked values only.** Plaintext never travels
   backend → frontend.
+
+---
+
+## Fetching a URL the user supplied
+
+Anything that takes a URL from a chat message, a skill import or an agent
+configuration goes through **one** hardened fetcher in `src/agents/gather.ts`:
+
+- **HTTPS only**, default ports only, and **credentials in the URL are rejected**
+  (`https://user:pass@host` would otherwise put the password into a request line
+  and a log).
+- The hostname is resolved **once**, and **every** answer must be public. A name
+  that answers with one public and one private address fails closed rather than
+  getting the public one.
+- The socket then connects to **that exact validated address** (the resolved IP is
+  pinned into the request). Checking a name and opening a socket are two
+  different lookups — without the pin, a name can answer "public" during the
+  check and "private" during the request.
+- The guard is **re-applied on every redirect hop**, because a public host may
+  redirect to a private one.
+- The response is **size-capped while it streams** (200 KB for skill pages, 100 KB
+  for coding references), with a hard timeout. A cap applied after the body was
+  buffered is not a cap.
+- The private ranges are enumerated explicitly (RFC1918, loopback, link-local,
+  CGNAT, IETF protocol assignments, documentation ranges, multicast/reserved, and
+  the IPv6 equivalents), including IPv4-mapped IPv6 addresses.
+
+The weaker fetcher that used to read coding-reference pages inside `index.ts`
+was removed; the shared guard replaced it. Do not add a second `fetch()` on a
+user-supplied URL.
 
 ---
 

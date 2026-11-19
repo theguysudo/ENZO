@@ -104,6 +104,34 @@ export function DocumentEditor({
     URL.revokeObjectURL(url)
   }
 
+  const [downloadingPDF, setDownloadingPDF] = useState(false)
+
+  const handleDownloadPDF = async () => {
+    if (!content || downloadingPDF) return
+    setDownloadingPDF(true)
+    try {
+      const response = await fetch('/api/download-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, markdown: content }),
+      })
+      if (!response.ok) throw new Error('PDF generation failed')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err) {
+      console.error('PDF download failed:', err)
+    } finally {
+      setDownloadingPDF(false)
+    }
+  }
+
   const handleAiAssist = async () => {
     if (!onAssist || !content) return
     setAiThinking(true)
@@ -359,9 +387,24 @@ export function DocumentEditor({
 
                 <button
                   onClick={handleDownload}
+                  title="Download as .txt"
                   className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-white/70 hover:bg-white/5 transition-colors"
                 >
                   <Download className="h-3.5 w-3.5" />
+                </button>
+
+                <button
+                  onClick={handleDownloadPDF}
+                  disabled={!content || downloadingPDF}
+                  title="Download as PDF"
+                  className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-medium text-emerald-300 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                >
+                  {downloadingPDF ? (
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5" />
+                  )}
+                  <span>{downloadingPDF ? 'Generating…' : 'PDF'}</span>
                 </button>
 
                 <button

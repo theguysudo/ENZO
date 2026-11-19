@@ -21,6 +21,7 @@
  * starts returning empty, check the `result__a` / `result__snippet` selectors.
  */
 import Groq from 'groq-sdk';
+import { attributionHeaders } from '../core/attribution.js';
 
 export type WebResult = { title: string; url: string; site: string; desc: string };
 
@@ -213,7 +214,7 @@ async function searchBingRss(query: string, limit: number): Promise<string> {
 }
 
 async function searchViaGroq(query: string, groqApiKey: string): Promise<string> {
-  const groq = new Groq({ apiKey: groqApiKey });
+  const groq = new Groq({ apiKey: groqApiKey, defaultHeaders: attributionHeaders() });
   const completion = await groq.chat.completions.create({
     model: 'compound-mini',
     messages: [

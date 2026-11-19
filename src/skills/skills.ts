@@ -22,6 +22,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { attributionHeaders } from '../core/attribution.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ENZO_SKILLS_DIR lets tests (and exotic installs) relocate the user skill
@@ -605,7 +606,7 @@ async function distillSkill(repoUrl: string, snapshot: string, files: string[], 
   if (!groqKey || !snapshot.trim()) return fallback;
 
   const { Groq } = await import('groq-sdk');
-  const groq = new Groq({ apiKey: groqKey, timeout: 15000, maxRetries: 0 });
+  const groq = new Groq({ apiKey: groqKey, timeout: 15000, maxRetries: 0, defaultHeaders: attributionHeaders() });
   const fileList = files.slice(0, 30).map((f) => `- ${f}`).join('\n');
 
   const sysPrompt = `You distill GitHub repositories into reusable "skills" for an AI assistant. Given a repo snapshot, produce a JSON skill guide.
