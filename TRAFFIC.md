@@ -6,14 +6,25 @@
 
 ## Latest snapshot
 
-**Week 2026-W47** (updated 2026-11-19)
+**Week 2026-W47** (updated 2026-11-20)
 
 | Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
 | last 14 days | 137 | 81 | 625 | 230 | 121 |
 | all time | 3676 | — | 3747 | — | 121 |
 
-Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **204**
+Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **206**
+
+App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **1**
+
+| Installer | Downloads |
+|---|---|
+| `ENZO-1.7.0-less-theme-setup.exe` | 1 |
+| `ENZO-1.7.0-full-theme-setup.exe` | 0 |
+| `ENZO-1.7.0-macOS-arm64.dmg` | 0 |
+
+One download is one fetch of one installer file — the same
+person can download both the macOS and the Windows build.
 
 All-time totals are the sum of the persistent per-day record in
 [`traffic/history.json`](traffic/history.json) — days stay in the record
