@@ -10,10 +10,10 @@
 
 | Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
-| last 14 days | 133 | 82 | 645 | 228 | 122 |
-| all time | 3680 | — | 3817 | — | 122 |
+| last 14 days | 133 | 82 | 645 | 228 | 124 |
+| all time | 3680 | — | 3817 | — | 124 |
 
-Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **208**
+Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **211**
 
 App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **2**
 
