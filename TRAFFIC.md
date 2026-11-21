@@ -10,10 +10,10 @@
 
 | Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
-| last 14 days | 133 | 82 | 645 | 228 | 124 |
-| all time | 3680 | — | 3817 | — | 124 |
+| last 14 days | 167 | 107 | 678 | 235 | 123 |
+| all time | 3721 | — | 3884 | — | 123 |
 
-Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **211**
+Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **214**
 
 App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **2**
 
@@ -33,6 +33,7 @@ after GitHub's 14-day window slides past them. Unique counts are windowed
 
 | Day | Views | Unique | Clones | Unique |
 |---|---|---|---|---|
+| 2026-11-20 | 41 | 30 | 67 | 26 |
 | 2026-11-19 | 4 | 4 | 70 | 26 |
 | 2026-11-18 | 14 | 12 | 29 | 13 |
 | 2026-11-17 | 9 | 8 | 53 | 30 |
@@ -46,19 +47,21 @@ after GitHub's 14-day window slides past them. Unique counts are windowed
 | 2026-11-09 | 5 | 5 | 55 | 30 |
 | 2026-11-08 | 5 | 3 | 36 | 23 |
 | 2026-11-07 | 8 | 5 | 42 | 16 |
-| 2026-11-06 | 7 | 5 | 34 | 18 |
 
 ### Top referrers (last 14 days)
 
 | Source | Views | Unique |
 |---|---|---|
 | github.com | 29 | 28 |
+| reddit.com | 7 | 7 |
 | felladrin-awesome-ai-web-search.static.hf.space | 6 | 6 |
-| Google | 5 | 5 |
+| com.reddit.frontpage | 5 | 5 |
+| Google | 4 | 4 |
 | producthunt.com | 4 | 3 |
 | DuckDuckGo | 2 | 2 |
+| Bing | 1 | 1 |
 | i.pixcat.cn | 1 | 1 |
-| search.brave.com | 1 | 1 |
+| old.reddit.com | 1 | 1 |
 
 
 ## Weekly history
