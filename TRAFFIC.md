@@ -10,18 +10,18 @@
 
 | Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
-| last 14 days | 181 | 115 | 677 | 240 | 123 |
-| all time | 3743 | — | 3925 | — | 123 |
+| last 14 days | 181 | 115 | 677 | 240 | 124 |
+| all time | 3743 | — | 3925 | — | 124 |
 
 Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **222**
 
-App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **2**
+App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **3**
 
 | Installer | Downloads |
 |---|---|
 | `ENZO-1.7.0-full-theme-setup.exe` | 1 |
 | `ENZO-1.7.0-less-theme-setup.exe` | 1 |
-| `ENZO-1.7.0-macOS-arm64.dmg` | 0 |
+| `ENZO-1.7.0-macOS-arm64.dmg` | 1 |
 
 One download is one fetch of one installer file — the same
 person can download both the macOS and the Windows build.
