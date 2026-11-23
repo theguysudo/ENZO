@@ -446,7 +446,23 @@ The **one-click desktop apps ship this same variant** — the `.dmg` and `.exe` 
 - **[Revesery](https://revesery.com/@alex/how-to-set-up-the-enzo-self-hosted-ai-workspace-muffcxe4)** — a community setup guide
 - **Daniel Kornas** on [LinkedIn](https://www.linkedin.com/posts/daniel-kornas_your-ai-workspace-doesnt-need-to-sit-between-activity-7508321788356046848-iyST) and [X](https://x.com/DanKornas/status/2102555791739761116) — "Your AI workspace doesn't need to sit between you and your model provider"
 - **[ncybersec](https://www.facebook.com/ncybersec/posts/enzo-a-self-hosted-bring-your-own-key-ai-workspace-for-chatting-with-300-models-/1507565364732231/)** and **[elbonay.duredeyef](https://www.facebook.com/elbonay.duredeyef/posts/your-ai-workspace-doesnt-need-to-sit-between-you-and-your-model-providerenzo-is-/29148675744717250/)** on Facebook
-- Curated lists that merged the addition: [awesome-opensource-ai](https://github.com/alvinreal/awesome-opensource-ai) · [Awesome-AI-Agents](https://github.com/Jenqyang/Awesome-AI-Agents) · [awesome-ai-web-search](https://github.com/felladrin/awesome-ai-web-search) · [awesome-gpt](https://github.com/awesome-gptX/awesome-gpt)
+- Curated lists that merged the addition: [awesome-opensource-ai](https://github.com/alvinreal/awesome-opensource-ai) · [Awesome-AI-Agents](https://github.com/Jenqyang/Awesome-AI-Agents) · [awesome-ai-web-search](https://github.com/felladrin/awesome-ai-web-search) · [awesome-gpt](https://github.com/awesome-gptX/awesome-gpt) · [awesome-agents](https://github.com/kyrolabs/awesome-agents) · [awesome-llm-services](https://github.com/av/awesome-llm-services)
+
+## The maintainer ships upstream too
+
+ENZO is built and maintained by one person. That person also fixes other people's code for free — merged by the maintainers who own those repos, every one reviewed and CI'd upstream:
+
+| upstream | what was broken | fix |
+| --- | --- | --- |
+| [huggingface/lerobot](https://github.com/huggingface/lerobot/pull/5465) | `EvalConfig` accepted `n_episodes=0` and negative batch sizes, then failed later with a misleading error | validate at config construction, where the error can name the field |
+| [amd/gaia](https://github.com/amd/gaia/pull/8843) | the approval card's expanded argument view hid invisible unicode that the main view was careful about | route those values through the same escaping rule |
+| [neomjs/neo](https://github.com/neomjs/neo/pull/21991) | a dialog opened without an animation target stayed parked off-screen — an override killed by an earlier rename | rename the override onto the live lifecycle hook, plus a unit spec |
+| [Ylianst/MeshCentral](https://github.com/Ylianst/MeshCentral/pull/8387) | Duo 2FA never set the "remember this device" cookie that the TOTP path set | set it on the Duo path the same way |
+| [jxxghp/MoviePilot](https://github.com/jxxghp/MoviePilot/pull/7547) | music search results kept their `// CD // 禁转` spec tails glued to the title | strip the spec tail with a whitelist that knows the transfer declarations |
+| [bramstroker/homeassistant-powercalc](https://github.com/bramstroker/homeassistant-powercalc/pull/5218) | a device profile carried apparent power (VA) instead of real watts | replace it with measured values, as the maintainer requested |
+| [3dg1luk43/ha_washdata](https://github.com/3dg1luk43/ha_washdata/pull/538) | the "Interrupted Min" label had no translation entry, so every language fell back to English | add it for all 34 languages |
+
+<sub>17 merged pull requests across 14 upstream repos so far — [the full list](https://github.com/pulls?q=is%3Apr+author%3Atheguysudo+is%3Amerged).</sub>
 
 ## License
 
