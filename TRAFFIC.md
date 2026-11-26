@@ -13,14 +13,14 @@
 | last 14 days | 186 | 122 | 761 | 240 | 123 |
 | all time | 3791 | — | 4138 | — | 123 |
 
-Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **229**
+Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **232**
 
-App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **4**
+App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **5**
 
 | Installer | Downloads |
 |---|---|
+| `ENZO-1.7.0-full-theme-setup.exe` | 2 |
 | `ENZO-1.7.0-less-theme-setup.exe` | 2 |
-| `ENZO-1.7.0-full-theme-setup.exe` | 1 |
 | `ENZO-1.7.0-macOS-arm64.dmg` | 1 |
 
 One download is one fetch of one installer file — the same
