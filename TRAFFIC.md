@@ -10,17 +10,17 @@
 
 | Snapshot | Views | Unique visitors | Clones | Unique cloners | Stars |
 |---|---|---|---|---|---|
-| last 14 days | 204 | 134 | 745 | 233 | 123 |
-| all time | 3788 | — | 4097 | — | 123 |
+| last 14 days | 186 | 122 | 761 | 240 | 123 |
+| all time | 3791 | — | 4138 | — | 123 |
 
 Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **229**
 
-App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **3**
+App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **4**
 
 | Installer | Downloads |
 |---|---|
+| `ENZO-1.7.0-less-theme-setup.exe` | 2 |
 | `ENZO-1.7.0-full-theme-setup.exe` | 1 |
-| `ENZO-1.7.0-less-theme-setup.exe` | 1 |
 | `ENZO-1.7.0-macOS-arm64.dmg` | 1 |
 
 One download is one fetch of one installer file — the same
@@ -33,6 +33,7 @@ after GitHub's 14-day window slides past them. Unique counts are windowed
 
 | Day | Views | Unique | Clones | Unique |
 |---|---|---|---|---|
+| 2026-11-25 | 3 | 3 | 41 | 23 |
 | 2026-11-24 | 13 | 10 | 93 | 13 |
 | 2026-11-23 | 20 | 17 | 55 | 23 |
 | 2026-11-22 | 12 | 10 | 24 | 14 |
@@ -46,18 +47,17 @@ after GitHub's 14-day window slides past them. Unique counts are windowed
 | 2026-11-14 | 17 | 12 | 24 | 13 |
 | 2026-11-13 | 2 | 2 | 58 | 28 |
 | 2026-11-12 | 16 | 13 | 132 | 43 |
-| 2026-11-11 | 21 | 15 | 25 | 15 |
 
 ### Top referrers (last 14 days)
 
 | Source | Views | Unique |
 |---|---|---|
-| github.com | 27 | 25 |
+| github.com | 26 | 24 |
 | reddit.com | 12 | 10 |
-| felladrin-awesome-ai-web-search.static.hf.space | 6 | 6 |
 | com.reddit.frontpage | 5 | 5 |
+| felladrin-awesome-ai-web-search.static.hf.space | 5 | 5 |
 | Google | 4 | 4 |
-| producthunt.com | 4 | 3 |
+| producthunt.com | 2 | 1 |
 | Bing | 1 | 1 |
 | DuckDuckGo | 1 | 1 |
 | i.pixcat.cn | 1 | 1 |
