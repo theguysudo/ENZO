@@ -13,13 +13,13 @@
 | last 14 days | 188 | 120 | 663 | 221 | 123 |
 | all time | 3809 | — | 4172 | — | 123 |
 
-Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **235**
+Docker pulls ([ghcr.io/theguysudo/enzo](https://github.com/theguysudo/ENZO/pkgs/container/enzo)): **237**
 
-App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **5**
+App downloads (the .dmg / .exe installers on the [releases page](https://github.com/theguysudo/ENZO/releases)): **7**
 
 | Installer | Downloads |
 |---|---|
-| `ENZO-1.7.0-full-theme-setup.exe` | 2 |
+| `ENZO-1.7.0-full-theme-setup.exe` | 4 |
 | `ENZO-1.7.0-less-theme-setup.exe` | 2 |
 | `ENZO-1.7.0-macOS-arm64.dmg` | 1 |
 
